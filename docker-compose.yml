@@ -1,0 +1,125 @@
+version: '3.8'
+
+services:
+  # Redpanda (Kafka-compatible message broker)
+  redpanda:
+    image: docker.redpanda.com/vectorized/redpanda:v23.2.11
+    container_name: redpanda
+    command:
+      - redpanda
+      - start
+      - --kafka-addr
+      - internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr
+      - internal://redpanda:9092,external://localhost:19092
+      - --pandaproxy-addr
+      - internal://0.0.0.0:8082,external://0.0.0.0:18082
+      - --advertise-pandaproxy-addr
+      - internal://redpanda:8082,external://localhost:18082
+      - --schema-registry-addr
+      - internal://0.0.0.0:8081,external://0.0.0.0:18081
+      - --advertise-rpc-addr
+      - redpanda:33145
+      - --smp
+      - '1'
+      - --memory
+      - 1G
+      - --mode dev-container
+      - --default-log-level=info
+    ports:
+      - "9092:9092"
+      - "19092:19092"
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Producer API Service
+  producer:
+    build:
+      context: .
+      dockerfile: Dockerfile.producer
+    container_name: producer-api
+    ports:
+      - "8000:8000"
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=redpanda:9092
+      - KAFKA_TOPIC=events.raw
+      - ENVIRONMENT=production
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Consumer Service (Instance 1)
+  consumer-1:
+    build:
+      context: .
+      dockerfile: Dockerfile.consumer
+    container_name: consumer-1
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=redpanda:9092
+      - KAFKA_TOPIC=events.raw
+      - KAFKA_DLQ_TOPIC=events.dlq
+      - KAFKA_CONSUMER_GROUP=event-processors
+      - DYNAMODB_TABLE=EventsHot
+      - S3_BUCKET=event-platform-raw-events
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_PROFILE=${AWS_PROFILE:-}
+      - ENVIRONMENT=production
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      # Mount AWS credentials if using profile
+      - ~/.aws:/root/.aws:ro
+
+  # Consumer Service (Instance 2)
+  consumer-2:
+    build:
+      context: .
+      dockerfile: Dockerfile.consumer
+    container_name: consumer-2
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=redpanda:9092
+      - KAFKA_TOPIC=events.raw
+      - KAFKA_DLQ_TOPIC=events.dlq
+      - KAFKA_CONSUMER_GROUP=event-processors
+      - DYNAMODB_TABLE=EventsHot
+      - S3_BUCKET=event-platform-raw-events
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_PROFILE=${AWS_PROFILE:-}
+      - ENVIRONMENT=production
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      # Mount AWS credentials if using profile
+      - ~/.aws:/root/.aws:ro
+
+  # GraphQL API Service
+  graphql-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.graphql
+    container_name: graphql-api
+    ports:
+      - "8001:8001"
+    environment:
+      - DYNAMODB_TABLE=EventsHot
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_PROFILE=${AWS_PROFILE:-}
+      - ENVIRONMENT=production
+    restart: unless-stopped
+    volumes:
+      # Mount AWS credentials if using profile
+      - ~/.aws:/root/.aws:ro
+
+volumes:
+  redpanda-data:
+

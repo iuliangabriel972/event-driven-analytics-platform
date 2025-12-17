@@ -1,0 +1,22 @@
+# FastAPI and web server
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# GraphQL
+strawberry-graphql[fastapi]==0.212.1
+
+# Kafka
+aiokafka==0.10.0
+
+# AWS SDK
+boto3==1.29.7
+aioboto3==12.1.0
+
+# Data validation
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Utilities
+python-dotenv==1.0.0
+structlog==23.2.0
+
