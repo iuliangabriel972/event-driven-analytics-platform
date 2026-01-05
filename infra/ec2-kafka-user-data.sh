@@ -23,7 +23,7 @@ docker run -d \
   --kafka-addr internal://0.0.0.0:9092 \
   --advertise-kafka-addr internal://$PRIVATE_IP:9092 \
   --smp 1 \
-  --memory 1G \
+      --memory 512M \
   --mode dev-container
 
 echo "✅ Redpanda started with advertise address: $PRIVATE_IP:9092"
