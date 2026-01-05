@@ -1,0 +1,70 @@
+{
+    "family":  "event-platform-processor",
+    "networkMode":  "awsvpc",
+    "requiresCompatibilities":  [
+                                    "FARGATE"
+                                ],
+    "cpu":  "256",
+    "memory":  "512",
+    "executionRoleArn":  "arn:aws:iam::410772457866:role/ecsTaskExecutionRole",
+    "taskRoleArn":  "arn:aws:iam::410772457866:role/ecsTaskRole",
+    "containerDefinitions":  [
+                                 {
+                                     "name":  "processor",
+                                     "image":  "410772457866.dkr.ecr.us-east-1.amazonaws.com/event-platform-processor:latest",
+                                     "essential":  true,
+                                     "portMappings":  [
+                                                          {
+                                                              "containerPort":  8002,
+                                                              "protocol":  "tcp"
+                                                          }
+                                                      ],
+                                     "environment":  [
+                                                        {
+                                                            "name":  "KAFKA_BOOTSTRAP_SERVERS",
+                                                            "value":  "172.31.15.237:9092"
+                                                        },
+                                                         {
+                                                             "name":  "KAFKA_TOPIC",
+                                                             "value":  "events.raw"
+                                                         },
+                                                         {
+                                                             "name":  "KAFKA_DLQ_TOPIC",
+                                                             "value":  "events.dlq"
+                                                         },
+                                                         {
+                                                             "name":  "KAFKA_CONSUMER_GROUP",
+                                                             "value":  "event-processors"
+                                                         },
+                                                         {
+                                                             "name":  "DYNAMODB_TABLE",
+                                                             "value":  "EventsHot"
+                                                         },
+                                                         {
+                                                             "name":  "S3_BUCKET",
+                                                             "value":  "event-platform-raw-events"
+                                                         },
+                                                         {
+                                                             "name":  "AWS_REGION",
+                                                             "value":  "us-east-1"
+                                                         },
+                                                         {
+                                                             "name":  "ENVIRONMENT",
+                                                             "value":  "production"
+                                                         },
+                                                         {
+                                                             "name":  "METRICS_PORT",
+                                                             "value":  "8002"
+                                                         }
+                                                     ],
+                                    "logConfiguration":  {
+                                                             "logDriver":  "awslogs",
+                                                             "options":  {
+                                                                             "awslogs-group":  "/ecs/event-platform-processor",
+                                                                             "awslogs-region":  "us-east-1",
+                                                                             "awslogs-stream-prefix":  "ecs"
+                                                                         }
+                                                         }
+                                 }
+                             ]
+}

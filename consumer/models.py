@@ -1,5 +1,6 @@
 """Data models for the consumer service."""
 from datetime import datetime
+from decimal import Decimal
 from typing import Any, Dict
 from uuid import UUID
 
@@ -22,14 +23,29 @@ class EventModel:
         self.payload = payload
     
     def to_dynamodb_item(self) -> Dict[str, Any]:
-        """Convert to DynamoDB item format."""
+        """Convert to DynamoDB item format with Decimal types for numeric values."""
+        # Convert payload dictionary, converting floats to Decimals
+        converted_payload = self._convert_floats_to_decimal(self.payload)
+        
         return {
             "event_id": str(self.event_id),
             "timestamp": self.timestamp.isoformat(),
             "event_type": self.event_type,
             "user_id": self.user_id,
-            "payload": self.payload,
+            "payload": converted_payload,
         }
+    
+    @staticmethod
+    def _convert_floats_to_decimal(obj: Any) -> Any:
+        """Recursively convert float values to Decimal for DynamoDB compatibility."""
+        if isinstance(obj, float):
+            return Decimal(str(obj))
+        elif isinstance(obj, dict):
+            return {key: EventModel._convert_floats_to_decimal(value) for key, value in obj.items()}
+        elif isinstance(obj, list):
+            return [EventModel._convert_floats_to_decimal(item) for item in obj]
+        else:
+            return obj
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "EventModel":

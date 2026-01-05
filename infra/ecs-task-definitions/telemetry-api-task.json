@@ -1,0 +1,68 @@
+{
+    "family":  "event-platform-telemetry-api",
+    "networkMode":  "awsvpc",
+    "requiresCompatibilities":  [
+                                    "FARGATE"
+                                ],
+    "cpu":  "256",
+    "memory":  "512",
+    "executionRoleArn":  "arn:aws:iam::410772457866:role/ecsTaskExecutionRole",
+    "taskRoleArn":  "arn:aws:iam::410772457866:role/ecsTaskRole",
+    "containerDefinitions":  [
+                                 {
+                                     "name":  "telemetry-api",
+                                     "image":  "410772457866.dkr.ecr.us-east-1.amazonaws.com/event-platform-telemetry-api:latest",
+                                     "essential":  true,
+                                     "portMappings":  [
+                                                          {
+                                                              "containerPort":  8000,
+                                                              "protocol":  "tcp"
+                                                          }
+                                                      ],
+                                     "environment":  [
+                                                        {
+                                                            "name":  "KAFKA_BOOTSTRAP_SERVERS",
+                                                            "value":  "172.31.15.237:9092"
+                                                        },
+                                                         {
+                                                             "name":  "KAFKA_TOPIC",
+                                                             "value":  "events.raw"
+                                                         },
+                                                         {
+                                                             "name":  "ENVIRONMENT",
+                                                             "value":  "production"
+                                                         },
+                                                         {
+                                                             "name":  "JWT_SECRET_KEY",
+                                                             "value":  "change-me-in-production-use-secrets-manager"
+                                                         },
+                                                         {
+                                                             "name":  "JWT_ALGORITHM",
+                                                             "value":  "HS256"
+                                                         },
+                                                         {
+                                                             "name":  "JWT_AUDIENCE",
+                                                             "value":  "event-platform"
+                                                         }
+                                                     ],
+                                     "logConfiguration":  {
+                                                              "logDriver":  "awslogs",
+                                                              "options":  {
+                                                                              "awslogs-group":  "/ecs/event-platform-producer",
+                                                                              "awslogs-region":  "us-east-1",
+                                                                              "awslogs-stream-prefix":  "ecs"
+                                                                          }
+                                                          },
+                                     "healthCheck":  {
+                                                         "command":  [
+                                                                         "CMD-SHELL",
+                                                                         "curl -f http://localhost:8000/health || exit 1"
+                                                                     ],
+                                                         "interval":  30,
+                                                         "timeout":  5,
+                                                         "retries":  3,
+                                                         "startPeriod":  60
+                                                     }
+                                 }
+                             ]
+}

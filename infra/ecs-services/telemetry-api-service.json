@@ -1,0 +1,27 @@
+{
+    "serviceName":  "event-platform-telemetry-api",
+    "cluster":  "event-platform-cluster",
+    "taskDefinition":  "event-platform-telemetry-api",
+    "desiredCount":  1,
+    "launchType":  "FARGATE",
+    "networkConfiguration":  {
+                                 "awsvpcConfiguration":  {
+                                                             "subnets":  [
+                                                                             "subnet-0322341a6fc93eee8",
+                                                                             "subnet-0c01dab45aad414ea"
+                                                                         ],
+                                                             "securityGroups":  [
+                                                                                    "sg-0360789235f0ebb9a"
+                                                                                ],
+                                                             "assignPublicIp":  "ENABLED"
+                                                         }
+                             },
+    "loadBalancers":  [
+                          {
+                              "targetGroupArn":  "arn:aws:elasticloadbalancing:us-east-1:410772457866:targetgroup/event-platform-telemetry-api/400f036203d8986c",
+                              "containerName":  "telemetry-api",
+                              "containerPort":  8000
+                          }
+                      ],
+    "healthCheckGracePeriodSeconds":  60
+}

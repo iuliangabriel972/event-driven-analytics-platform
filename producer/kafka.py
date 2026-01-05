@@ -32,7 +32,8 @@ class KafkaProducer:
                 bootstrap_servers=self.bootstrap_servers,
                 value_serializer=lambda v: json.dumps(v).encode('utf-8'),
                 retry_backoff_ms=100,
-                max_block_ms=5000,
+                request_timeout_ms=60000,  # 60 seconds timeout
+                api_version='auto',
             )
             await self.producer.start()
             logger.info("kafka_producer_connected", bootstrap_servers=self.bootstrap_servers, topic=self.topic)
@@ -60,7 +61,12 @@ class KafkaProducer:
             KafkaError: If publishing fails
         """
         if not self.producer:
-            raise RuntimeError("Producer not connected. Call connect() first.")
+            # Try to connect if not already connected
+            try:
+                await self.connect()
+            except Exception as e:
+                logger.error("kafka_auto_connect_failed", error=str(e))
+                raise RuntimeError(f"Producer not connected and auto-connect failed: {str(e)}")
         
         try:
             await self.producer.send_and_wait(self.topic, event)

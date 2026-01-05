@@ -1,0 +1,23 @@
+{
+  "serviceName": "event-platform-producer",
+  "cluster": "event-platform-cluster",
+  "taskDefinition": "event-platform-producer",
+  "desiredCount": 1,
+  "launchType": "FARGATE",
+  "networkConfiguration": {
+    "awsvpcConfiguration": {
+      "subnets": ["<SUBNET-ID-1>", "<SUBNET-ID-2>"],
+      "securityGroups": ["<SECURITY-GROUP-ID>"],
+      "assignPublicIp": "ENABLED"
+    }
+  },
+  "loadBalancers": [
+    {
+      "targetGroupArn": "<PRODUCER-TARGET-GROUP-ARN>",
+      "containerName": "producer",
+      "containerPort": 8000
+    }
+  ],
+  "healthCheckGracePeriodSeconds": 60
+}
+

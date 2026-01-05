@@ -1,0 +1,23 @@
+{
+    "serviceName":  "event-platform-processor",
+    "cluster":  "event-platform-cluster",
+    "taskDefinition":  "event-platform-processor",
+    "desiredCount":  2,
+    "launchType":  "FARGATE",
+    "networkConfiguration":  {
+                                 "awsvpcConfiguration":  {
+                                                             "subnets":  [
+                                                                             "subnet-0322341a6fc93eee8",
+                                                                             "subnet-0c01dab45aad414ea"
+                                                                         ],
+                                                             "securityGroups":  [
+                                                                                    "sg-0360789235f0ebb9a"
+                                                                                ],
+                                                             "assignPublicIp":  "ENABLED"
+                                                         }
+                             },
+    "deploymentConfiguration":  {
+                                    "maximumPercent":  200,
+                                    "minimumHealthyPercent":  50
+                                }
+}

@@ -1,0 +1,54 @@
+version: 0.2
+
+phases:
+  install:
+    commands:
+      - echo Installing dependencies...
+      - apt-get update -y
+      - apt-get install -y unzip
+  pre_build:
+    commands:
+      - echo Extracting source code...
+      - unzip -q source-code.zip || true
+      - ls -la
+      - echo Logging in to Amazon ECR...
+      - ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+      - REGION=us-east-1
+      - ECR_BASE=${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com
+      - aws ecr get-login-password --region ${REGION} | docker login --username AWS --password-stdin ${ECR_BASE}
+      - echo Logged in to ECR
+  build:
+    commands:
+      - echo Build started on `date`
+      - ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+      - REGION=us-east-1
+      - ECR_BASE=${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com
+      
+      - echo Building telemetry-api image...
+      - docker build -f Dockerfile.producer -t ${ECR_BASE}/event-platform-telemetry-api:latest .
+      - docker tag ${ECR_BASE}/event-platform-telemetry-api:latest ${ECR_BASE}/event-platform-telemetry-api:build-$(date +%s)
+      
+      - echo Building processor image...
+      - docker build -f Dockerfile.consumer -t ${ECR_BASE}/event-platform-processor:latest .
+      - docker tag ${ECR_BASE}/event-platform-processor:latest ${ECR_BASE}/event-platform-processor:build-$(date +%s)
+      
+      - echo Building analytics-api image...
+      - docker build -f Dockerfile.graphql -t ${ECR_BASE}/event-platform-analytics-api:latest .
+      - docker tag ${ECR_BASE}/event-platform-analytics-api:latest ${ECR_BASE}/event-platform-analytics-api:build-$(date +%s)
+  post_build:
+    commands:
+      - echo Build completed on `date`
+      - ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+      - REGION=us-east-1
+      - ECR_BASE=${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com
+      
+      - echo Pushing telemetry-api image...
+      - docker push ${ECR_BASE}/event-platform-telemetry-api:latest
+      
+      - echo Pushing processor image...
+      - docker push ${ECR_BASE}/event-platform-processor:latest
+      
+      - echo Pushing analytics-api image...
+      - docker push ${ECR_BASE}/event-platform-analytics-api:latest
+      
+      - echo "All images pushed successfully!"

@@ -10,6 +10,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY consumer/ ./consumer/
 COPY shared/ ./shared/
 
+# Expose Prometheus metrics port
+EXPOSE 8002
+
 # Run consumer
 CMD ["python", "-m", "consumer.main"]
 

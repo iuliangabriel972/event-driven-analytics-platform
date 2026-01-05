@@ -1,0 +1,64 @@
+{
+  "family": "event-platform-analytics-api",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "arn:aws:iam::410772457866:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::410772457866:role/ecsTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "analytics-api",
+      "image": "410772457866.dkr.ecr.us-east-1.amazonaws.com/event-platform-analytics-api:latest",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8001,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "DYNAMODB_TABLE",
+          "value": "EventsHot"
+        },
+        {
+          "name": "AWS_REGION",
+          "value": "us-east-1"
+        },
+        {
+          "name": "ENVIRONMENT",
+          "value": "production"
+        },
+        {
+          "name": "JWT_SECRET_KEY",
+          "value": "change-me-in-production-use-secrets-manager"
+        },
+        {
+          "name": "JWT_ALGORITHM",
+          "value": "HS256"
+        },
+        {
+          "name": "JWT_AUDIENCE",
+          "value": "event-platform"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/event-platform-graphql",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "healthCheck": {
+        "command": ["CMD-SHELL", "curl -f http://localhost:8001/health || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      }
+    }
+  ]
+}
+

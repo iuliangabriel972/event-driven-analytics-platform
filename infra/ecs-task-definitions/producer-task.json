@@ -1,0 +1,51 @@
+{
+  "family": "event-platform-producer",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "arn:aws:iam::<ACCOUNT-ID>:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::<ACCOUNT-ID>:role/ecsTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "producer",
+      "image": "<ACCOUNT-ID>.dkr.ecr.us-east-1.amazonaws.com/event-platform-producer:latest",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "KAFKA_BOOTSTRAP_SERVERS",
+          "value": "<KAFKA-BROKER>:9092"
+        },
+        {
+          "name": "KAFKA_TOPIC",
+          "value": "events.raw"
+        },
+        {
+          "name": "ENVIRONMENT",
+          "value": "production"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/event-platform-producer",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "healthCheck": {
+        "command": ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3
+      }
+    }
+  ]
+}
+

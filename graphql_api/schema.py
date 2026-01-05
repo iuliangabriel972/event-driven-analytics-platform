@@ -1,7 +1,9 @@
 """GraphQL schema definitions."""
+import json
 import os
+from decimal import Decimal
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Any, Dict
 from uuid import UUID
 
 import aioboto3
@@ -11,6 +13,21 @@ from strawberry import Schema, field, type
 from shared.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+def convert_dynamodb_types(obj: Any) -> Any:
+    """Convert DynamoDB types (Decimal, etc.) to JSON-serializable types."""
+    from decimal import Decimal
+    if isinstance(obj, Decimal):
+        # Convert Decimal to string (as per DynamoDB convention)
+        return str(obj)
+    elif isinstance(obj, dict):
+        return {k: convert_dynamodb_types(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_dynamodb_types(item) for item in obj]
+    elif hasattr(obj, 'value'):  # Handle boto3 DynamoDB types
+        return convert_dynamodb_types(obj.value)
+    return obj
 
 # Configuration
 DYNAMODB_TABLE = os.getenv("DYNAMODB_TABLE", "EventsHot")
@@ -24,7 +41,7 @@ class Event:
     event_id: str
     event_type: str
     user_id: str
-    payload: dict
+    payload: str  # JSON string representation
     timestamp: str
 
 
@@ -63,16 +80,19 @@ class Query:
                     reverse=True,
                 )[:limit]
                 
-                events = [
-                    Event(
-                        event_id=item["event_id"],
-                        event_type=item["event_type"],
-                        user_id=item["user_id"],
-                        payload=item["payload"],
-                        timestamp=item["timestamp"],
+                events = []
+                for item in sorted_items:
+                    # Convert DynamoDB types to JSON-serializable
+                    payload_dict = convert_dynamodb_types(item.get("payload", {}))
+                    events.append(
+                        Event(
+                            event_id=str(item.get("event_id", "")),
+                            event_type=str(item.get("event_type", "")),
+                            user_id=str(item.get("user_id", "")),
+                            payload=json.dumps(payload_dict),
+                            timestamp=str(item.get("timestamp", "")),
+                        )
                     )
-                    for item in sorted_items
-                ]
                 
                 logger.info("latest_events_query", limit=limit, returned=len(events))
                 return events
@@ -109,16 +129,18 @@ class Query:
                 )
                 
                 items = response.get("Items", [])
-                events = [
-                    Event(
-                        event_id=item["event_id"],
-                        event_type=item["event_type"],
-                        user_id=item["user_id"],
-                        payload=item["payload"],
-                        timestamp=item["timestamp"],
+                events = []
+                for item in items:
+                    payload_dict = convert_dynamodb_types(item.get("payload", {}))
+                    events.append(
+                        Event(
+                            event_id=str(item.get("event_id", "")),
+                            event_type=str(item.get("event_type", "")),
+                            user_id=str(item.get("user_id", "")),
+                            payload=json.dumps(payload_dict),
+                            timestamp=str(item.get("timestamp", "")),
+                        )
                     )
-                    for item in items
-                ]
                 
                 logger.info(
                     "events_by_type_query",
@@ -163,16 +185,18 @@ class Query:
                 )
                 
                 items = response.get("Items", [])
-                events = [
-                    Event(
-                        event_id=item["event_id"],
-                        event_type=item["event_type"],
-                        user_id=item["user_id"],
-                        payload=item["payload"],
-                        timestamp=item["timestamp"],
+                events = []
+                for item in items:
+                    payload_dict = convert_dynamodb_types(item.get("payload", {}))
+                    events.append(
+                        Event(
+                            event_id=str(item.get("event_id", "")),
+                            event_type=str(item.get("event_type", "")),
+                            user_id=str(item.get("user_id", "")),
+                            payload=json.dumps(payload_dict),
+                            timestamp=str(item.get("timestamp", "")),
+                        )
                     )
-                    for item in items
-                ]
                 
                 logger.info(
                     "events_by_user_query",

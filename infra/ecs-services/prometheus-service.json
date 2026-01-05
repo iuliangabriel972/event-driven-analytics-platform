@@ -1,0 +1,15 @@
+{
+  "serviceName": "event-platform-prometheus",
+  "cluster": "event-platform-cluster",
+  "taskDefinition": "event-platform-prometheus",
+  "desiredCount": 1,
+  "launchType": "FARGATE",
+  "networkConfiguration": {
+    "awsvpcConfiguration": {
+      "subnets": ["subnet-0322341a6fc93eee8", "subnet-06fdadd8df2bdfeff"],
+      "securityGroups": ["sg-0360789235f0ebb9a"],
+      "assignPublicIp": "ENABLED"
+    }
+  },
+  "healthCheckGracePeriodSeconds": 60
+}

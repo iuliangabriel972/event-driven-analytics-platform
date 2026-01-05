@@ -1,442 +1,466 @@
 # Event-Driven Analytics Platform
 
-A scalable event-driven analytics platform built with Python, Kafka (Redpanda), GraphQL, and AWS. This platform demonstrates modern microservices architecture, real-time data ingestion, and cloud-native storage patterns.
+A scalable, production-ready event-driven analytics platform built with Python, Kafka (Redpanda), GraphQL, and AWS. The platform ingests events via HTTP, streams them through Kafka, processes with scalable consumers, stores data in DynamoDB (hot) and S3 (cold), and exposes read-only data via GraphQL API.
 
-## 🏗️ Architecture
-
-The platform consists of three main services communicating through Kafka:
+## Architecture
 
 ```
-┌─────────┐      ┌──────────────┐      ┌─────────────┐
-│ Client  │─────▶│ Producer API │─────▶│   Kafka     │
-│         │      │   (FastAPI)  │      │  (Redpanda) │
-└─────────┘      └──────────────┘      └──────┬──────┘
-                                               │
-                                               ▼
-                                    ┌──────────────────┐
-                                    │ Consumer Service │
-                                    │   (2 instances)  │
-                                    └──────┬───────────┘
-                                           │
-                    ┌─────────────────────┼─────────────────────┐
-                    ▼                     ▼                     ▼
-            ┌──────────────┐      ┌──────────────┐      ┌──────────────┐
-            │  DynamoDB    │      │     S3       │      │ GraphQL API  │
-            │  (Hot Data)  │      │ (Cold Data)  │      │  (Read-Only) │
-            └──────────────┘      └──────────────┘      └──────────────┘
+┌─────────────┐     ┌──────────────┐     ┌─────────────┐     ┌──────────────┐
+│   Client    │────▶│  Telemetry   │────▶│    Kafka    │────▶│   Processor  │
+│             │     │     API      │     │  (Redpanda) │     │  (Consumer) │
+└─────────────┘     └──────────────┘     └─────────────┘     └──────────────┘
+                                                                    │
+                                                                    ▼
+                                                          ┌──────────────┐
+                                                          │  DynamoDB    │
+                                                          │  (Hot Data)  │
+                                                          └──────────────┘
+                                                                    │
+                                                                    ▼
+                                                          ┌──────────────┐
+                                                          │     S3       │
+                                                          │ (Cold Data)  │
+                                                          └──────────────┘
+                                                                    │
+                                                                    ▼
+┌─────────────┐     ┌──────────────┐     ┌─────────────┐
+│   Client    │◀────│   Analytics  │◀────│  DynamoDB   │
+│             │     │  GraphQL API │     │             │
+└─────────────┘     └──────────────┘     └─────────────┘
 ```
 
-### Data Flow
+## Components
 
-1. **Event Ingestion**: Client sends events to Producer API (`POST /events`)
-2. **Event Streaming**: Producer publishes events to Kafka topic `events.raw`
-3. **Event Processing**: Consumer service (2 instances) processes events with at-least-once semantics
-4. **Data Storage**:
-   - **Hot Storage (DynamoDB)**: Normalized event data for fast queries
-   - **Cold Storage (S3)**: Raw JSON events for archival and analytics
-5. **Data Querying**: GraphQL API provides read-only access to DynamoDB data
+### Services
 
-## 🚀 Quick Start
+1. **Telemetry API** (Producer)
+   - FastAPI service for event ingestion
+   - JWT authentication
+   - Publishes events to Kafka
+   - Prometheus metrics
 
-### Prerequisites
+2. **Processor** (Consumer)
+   - Kafka consumer for event processing
+   - Writes to DynamoDB (hot storage)
+   - Writes to S3 (cold storage)
+   - Dead Letter Queue (DLQ) support
+   - Prometheus metrics
 
+3. **Analytics API** (GraphQL)
+   - Strawberry GraphQL API
+   - Read-only queries from DynamoDB
+   - JWT authentication
+   - Prometheus metrics
+
+4. **Kafka** (Redpanda)
+   - Event streaming broker
+   - Runs on EC2 instance
+   - Kafka-compatible API
+
+5. **Monitoring**
+   - Prometheus for metrics collection
+   - Grafana for visualization
+
+## Technology Stack
+
+- **Python 3.11**
+- **FastAPI** - HTTP services
+- **Strawberry GraphQL** - GraphQL API
+- **aiokafka** - Async Kafka client
+- **Redpanda** - Kafka-compatible broker
+- **DynamoDB** - Hot data storage
+- **S3** - Cold data storage
+- **AWS ECS Fargate** - Container orchestration
+- **AWS ALB** - Load balancing
+- **Prometheus** - Metrics
+- **Grafana** - Dashboards
+- **JWT** - Authentication
+
+## Prerequisites
+
+- AWS Account with CLI configured
+- Docker Desktop (for building images)
 - Python 3.11+
-- Docker and Docker Compose
-- AWS Account (for DynamoDB and S3)
-- AWS CLI configured with a profile
+- PowerShell (for scripts)
 
-### Local Development
+## AWS Infrastructure
 
-1. **Clone the repository**:
-   ```bash
-   git clone <repository-url>
-   cd event-platform
-   ```
+### Resources Created
 
-2. **Configure environment**:
-   ```bash
-   cp env.example .env
-   # Edit .env with your AWS configuration
-   ```
+- **VPC** with public subnets
+- **ECS Cluster** (`event-platform-cluster`)
+- **ECR Repositories**:
+  - `event-platform-telemetry-api`
+  - `event-platform-processor`
+  - `event-platform-analytics-api`
+  - `event-platform-prometheus`
+- **DynamoDB Table**: `EventsHot`
+- **S3 Bucket**: `event-platform-raw-events`
+- **EC2 Instance**: Kafka/Redpanda
+- **Application Load Balancer**
+- **CloudWatch Log Groups**
+- **IAM Roles**: `ecsTaskExecutionRole`, `ecsTaskRole`
 
-3. **Start services**:
-   ```bash
-   docker-compose up -d
-   ```
+### Network Configuration
 
-4. **Verify services**:
-   ```bash
-   # Check Producer API
-   curl http://localhost:8000/health
-   
-   # Check GraphQL API
-   curl http://localhost:8001/health
-   ```
+- Services run in public subnets with public IPs enabled
+- Security groups allow:
+  - Port 8000 (Telemetry API)
+  - Port 8001 (Analytics API)
+  - Port 9092 (Kafka)
+  - Port 9090 (Prometheus)
+  - Port 3000 (Grafana)
 
-5. **Send a test event**:
-   ```bash
-   curl -X POST http://localhost:8000/events \
-     -H "Content-Type: application/json" \
-     -d '{
-       "event_type": "page_view",
-       "user_id": "123",
-       "payload": {"page": "/home", "referrer": "google.com"}
-     }'
-   ```
+## Deployment
 
-6. **Query events via GraphQL**:
-   ```bash
-   curl -X POST http://localhost:8001/graphql \
-     -H "Content-Type: application/json" \
-     -d '{
-       "query": "{ latestEvents(limit: 5) { eventId eventType userId timestamp payload } }"
-     }'
-   ```
+### 1. Build and Push Docker Images
 
-### Running Without Docker
+```powershell
+# Login to ECR
+$accountId = "YOUR_ACCOUNT_ID"
+$region = "us-east-1"
+$registry = "${accountId}.dkr.ecr.${region}.amazonaws.com"
+aws ecr get-login-password --region $region | docker login --username AWS --password-stdin $registry
 
-1. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
+# Build and push images
+docker build -f Dockerfile.producer -t "${registry}/event-platform-telemetry-api:latest" .
+docker push "${registry}/event-platform-telemetry-api:latest"
 
-2. **Start Redpanda** (or use existing Kafka):
-   ```bash
-   docker run -d -p 9092:9092 docker.redpanda.com/vectorized/redpanda:v23.2.11 redpanda start --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092 --advertise-kafka-addr internal://localhost:9092,external://localhost:19092 --smp 1 --memory 1G --mode dev-container
-   ```
+docker build -f Dockerfile.consumer -t "${registry}/event-platform-processor:latest" .
+docker push "${registry}/event-platform-processor:latest"
 
-3. **Start services** (in separate terminals):
-   ```bash
-   # Producer
-   python -m producer.main
-   
-   # Consumer
-   python -m consumer.main
-   
-   # GraphQL API
-   python -m graphql_api.main
-   ```
-
-## 📦 Services
-
-### Producer API (`producer/`)
-
-FastAPI service that accepts events via HTTP and publishes them to Kafka.
-
-**Endpoints**:
-- `POST /events` - Ingest an event
-- `GET /health` - Health check
-
-**Request Format**:
-```json
-{
-  "event_type": "page_view",
-  "user_id": "123",
-  "payload": {
-    "page": "/home",
-    "referrer": "google.com"
-  }
-}
+docker build -f Dockerfile.graphql -t "${registry}/event-platform-analytics-api:latest" .
+docker push "${registry}/event-platform-analytics-api:latest"
 ```
 
-**Response**:
-```json
-{
-  "event_id": "550e8400-e29b-41d4-a716-446655440000",
-  "status": "accepted",
-  "message": "Event accepted for processing"
-}
+### 2. Deploy Infrastructure
+
+The infrastructure is deployed via AWS CLI. Key files:
+- `infra/ecs-task-definitions/*.json` - ECS task definitions
+- `infra/ecs-services/*.json` - ECS service definitions
+- `infra/scripts/setup-aws-infrastructure.sh` - Infrastructure setup
+
+### 3. Deploy Services
+
+```powershell
+# Register task definitions
+aws ecs register-task-definition --cli-input-json file://infra/ecs-task-definitions/telemetry-api-task.json --region us-east-1
+aws ecs register-task-definition --cli-input-json file://infra/ecs-task-definitions/processor-task.json --region us-east-1
+aws ecs register-task-definition --cli-input-json file://infra/ecs-task-definitions/analytics-api-task.json --region us-east-1
+
+# Create/update services
+aws ecs create-service --cli-input-json file://infra/ecs-services/telemetry-api-service.json --region us-east-1
+aws ecs create-service --cli-input-json file://infra/ecs-services/processor-service.json --region us-east-1
+aws ecs create-service --cli-input-json file://infra/ecs-services/analytics-api-service.json --region us-east-1
 ```
 
-### Consumer Service (`consumer/`)
+## Testing
 
-Async Kafka consumer that processes events and writes to DynamoDB and S3.
+### 1. Generate JWT Token
 
-**Features**:
-- Consumer group: `event-processors` (enables horizontal scaling)
-- At-least-once delivery semantics
-- Dead letter queue for failed messages
-- Idempotent writes to DynamoDB
-- Graceful shutdown handling
+```powershell
+.\scripts\generate_jwt_token.ps1
+```
 
-**Storage**:
-- **DynamoDB**: Normalized event data with GSI for efficient queries
-- **S3**: Raw JSON events organized by date (`events/YYYY/MM/DD/{event_id}.json`)
+Or manually:
 
-### GraphQL API (`graphql_api/`)
+```powershell
+python -c "import jwt; from datetime import datetime, timedelta, timezone; payload = {'sub': 'test-user', 'aud': 'event-platform', 'iat': int(datetime.now(timezone.utc).timestamp()), 'exp': int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp())}; print(jwt.encode(payload, 'change-me-in-production-use-secrets-manager', algorithm='HS256'))"
+```
 
-Read-only GraphQL API for querying events from DynamoDB.
+### 2. Get ALB DNS
 
-**Endpoint**: `POST /graphql`
+```powershell
+aws elbv2 describe-load-balancers --region us-east-1 --query 'LoadBalancers[?contains(LoadBalancerName, `event-platform`)].DNSName' --output text
+```
 
-**Queries**:
+### 3. Send Test Events
 
-1. **latestEvents(limit: Int)**: Get the most recent events
-   ```graphql
-   {
-     latestEvents(limit: 10) {
-       eventId
-       eventType
-       userId
-       timestamp
-       payload
-     }
-   }
-   ```
+```powershell
+$albDns = "YOUR_ALB_DNS"
+$token = "YOUR_JWT_TOKEN"
 
-2. **eventsByType(eventType: String)**: Filter events by type
-   ```graphql
-   {
-     eventsByType(eventType: "page_view") {
-       eventId
-       userId
-       timestamp
-       payload
-     }
-   }
-   ```
+$headers = @{
+    "Authorization" = "Bearer $token"
+    "Content-Type" = "application/json"
+}
 
-3. **eventsByUser(userId: String)**: Filter events by user
-   ```graphql
-   {
-     eventsByUser(userId: "123") {
-       eventId
-       eventType
-       timestamp
-       payload
-     }
-   }
-   ```
+$event = @{
+    event_type = "vehicle.location"
+    user_id = "user-001"
+    payload = @{
+        latitude = 40.7128
+        longitude = -74.0060
+        speed = 60
+    }
+} | ConvertTo-Json -Depth 10
 
-## 🔧 Configuration
+Invoke-RestMethod -Uri "http://${albDns}:8000/events" -Method Post -Headers $headers -Body $event
+```
+
+Or use the script:
+
+```powershell
+.\scripts\generate_events.ps1 -Count 10 -Interval 2 -JwtToken "YOUR_TOKEN" -ApiUrl "http://YOUR_ALB_DNS:8000"
+```
+
+### 4. Query GraphQL API
+
+```powershell
+$albDns = "YOUR_ALB_DNS"
+$token = "YOUR_JWT_TOKEN"
+
+$headers = @{
+    "Authorization" = "Bearer $token"
+    "Content-Type" = "application/json"
+}
+
+# Latest events
+$query = @{
+    query = "query { latestEvents(limit: 10) { eventId eventType userId timestamp payload } }"
+} | ConvertTo-Json
+
+Invoke-RestMethod -Uri "http://${albDns}:8001/graphql" -Method Post -Headers $headers -Body $query
+
+# Events by type
+$query = @{
+    query = "query { eventsByType(eventType: `"vehicle.location`") { eventId userId timestamp } }"
+} | ConvertTo-Json
+
+Invoke-RestMethod -Uri "http://${albDns}:8001/graphql" -Method Post -Headers $headers -Body $query
+
+# Events by user
+$query = @{
+    query = "query { eventsByUser(userId: `"user-001`") { eventId eventType timestamp } }"
+} | ConvertTo-Json
+
+Invoke-RestMethod -Uri "http://${albDns}:8001/graphql" -Method Post -Headers $headers -Body $query
+```
+
+Or use the script:
+
+```powershell
+.\scripts\query_graphql.ps1 -Query "query { latestEvents(limit: 10) { eventId eventType userId } }" -JwtToken "YOUR_TOKEN" -ApiUrl "http://YOUR_ALB_DNS:8001"
+```
+
+### 5. Verify Data in DynamoDB
+
+```powershell
+aws dynamodb scan --table-name EventsHot --region us-east-1 --max-items 10
+```
+
+### 6. Check Service Status
+
+```powershell
+aws ecs describe-services --cluster event-platform-cluster --services event-platform-telemetry-api event-platform-processor event-platform-analytics-api --region us-east-1 --query 'services[*].[serviceName,runningCount,desiredCount]' --output table
+```
+
+## GraphQL Queries
+
+### Available Queries
+
+1. **latestEvents(limit: Int)**
+   - Returns the most recent events
+   - Example: `query { latestEvents(limit: 10) { eventId eventType userId timestamp payload } }`
+
+2. **eventsByType(eventType: String)**
+   - Returns events filtered by type
+   - Example: `query { eventsByType(eventType: "vehicle.location") { eventId userId timestamp } }`
+
+3. **eventsByUser(userId: String)**
+   - Returns events filtered by user
+   - Example: `query { eventsByUser(userId: "user-001") { eventId eventType timestamp } }`
+
+## Monitoring
+
+### Prometheus
+
+- Metrics endpoint: `http://ALB_DNS:9090`
+- Scrapes metrics from:
+  - Telemetry API: `/metrics` on port 8000
+  - Processor: `/metrics` on port 8002
+  - Analytics API: `/metrics` on port 8001
+
+### Grafana
+
+- Dashboard: `http://ALB_DNS:3000`
+- Default credentials: `admin` / `admin`
+- Prometheus data source configured automatically
+
+### Metrics Available
+
+- `http_requests_total` - Total HTTP requests
+- `http_request_duration_seconds` - Request latency
+- `consumer_messages_processed_total` - Messages processed
+- `consumer_message_processing_seconds` - Processing time
+
+## Configuration
 
 ### Environment Variables
 
-See `env.example` for all configuration options:
+#### Telemetry API
+- `KAFKA_BOOTSTRAP_SERVERS` - Kafka broker address (e.g., `10.0.1.204:9092`)
+- `KAFKA_TOPIC` - Kafka topic name (default: `events.raw`)
+- `JWT_SECRET_KEY` - JWT secret key
+- `JWT_ALGORITHM` - JWT algorithm (default: `HS256`)
+- `JWT_AUDIENCE` - JWT audience (default: `event-platform`)
+- `ENVIRONMENT` - Environment name (default: `production`)
+
+#### Processor
+- `KAFKA_BOOTSTRAP_SERVERS` - Kafka broker address
+- `KAFKA_TOPIC` - Kafka topic name (default: `events.raw`)
+- `KAFKA_DLQ_TOPIC` - Dead letter queue topic (default: `events.dlq`)
+- `KAFKA_CONSUMER_GROUP` - Consumer group ID (default: `event-processors`)
+- `DYNAMODB_TABLE` - DynamoDB table name (default: `EventsHot`)
+- `S3_BUCKET` - S3 bucket name (default: `event-platform-raw-events`)
+- `AWS_REGION` - AWS region (default: `us-east-1`)
+- `METRICS_PORT` - Prometheus metrics port (default: `8002`)
+
+#### Analytics API
+- `DYNAMODB_TABLE` - DynamoDB table name (default: `EventsHot`)
+- `AWS_REGION` - AWS region (default: `us-east-1`)
+- `JWT_SECRET_KEY` - JWT secret key
+- `JWT_ALGORITHM` - JWT algorithm (default: `HS256`)
+- `JWT_AUDIENCE` - JWT audience (default: `event-platform`)
+
+## Project Structure
+
+```
+event-driven-analytics-platform/
+├── producer/              # Telemetry API service
+│   ├── main.py           # FastAPI application
+│   ├── kafka.py          # Kafka producer client
+│   └── schemas.py        # Pydantic models
+├── consumer/             # Processor service
+│   ├── main.py           # Kafka consumer
+│   ├── dynamodb.py       # DynamoDB writer
+│   ├── s3.py             # S3 writer
+│   └── models.py         # Data models
+├── graphql_api/          # Analytics API service
+│   ├── main.py           # FastAPI + GraphQL
+│   └── schema.py         # GraphQL schema
+├── shared/               # Shared utilities
+│   ├── auth.py           # JWT authentication
+│   └── logger.py         # Logging configuration
+├── scripts/              # Testing scripts
+│   ├── generate_jwt_token.ps1
+│   ├── generate_events.ps1
+│   └── query_graphql.ps1
+├── infra/                # Infrastructure as Code
+│   ├── ecs-task-definitions/
+│   ├── ecs-services/
+│   ├── monitoring/
+│   └── scripts/
+├── Dockerfile.producer    # Telemetry API image
+├── Dockerfile.consumer    # Processor image
+├── Dockerfile.graphql     # Analytics API image
+├── docker-compose.yml    # Local development
+├── requirements.txt      # Python dependencies
+└── README.md            # This file
+```
+
+## Local Development
+
+### Running with Docker Compose
+
+```bash
+docker-compose up -d
+```
+
+Services will be available at:
+- Telemetry API: `http://localhost:8000`
+- Analytics API: `http://localhost:8001`
+- Kafka: `localhost:9092`
+- Prometheus: `http://localhost:9090`
+- Grafana: `http://localhost:3000`
+
+### Running Services Locally
+
+1. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+2. Set environment variables:
+```bash
+export KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+export DYNAMODB_TABLE=EventsHot
+export AWS_REGION=us-east-1
+```
+
+3. Run services:
+```bash
+# Producer
+python -m producer.main
+
+# Consumer
+python -m consumer.main
+
+# GraphQL API
+python -m graphql_api.main
+```
 
-- **Kafka**: `KAFKA_BOOTSTRAP_SERVERS`, `KAFKA_TOPIC`, `KAFKA_CONSUMER_GROUP`
-- **AWS**: `AWS_REGION`, `AWS_PROFILE`, `DYNAMODB_TABLE`, `S3_BUCKET`
-- **Service**: `ENVIRONMENT` (development/production)
+## Security Notes
 
-### AWS Setup
+⚠️ **Important**: The default JWT secret key (`change-me-in-production-use-secrets-manager`) is for development only. In production:
 
-See [infra/aws.md](infra/aws.md) for detailed AWS deployment instructions.
+1. Use AWS Secrets Manager for JWT secrets
+2. Rotate keys regularly
+3. Use strong, randomly generated keys
+4. Enable HTTPS/TLS for all APIs
+5. Implement rate limiting
+6. Use VPC endpoints for AWS services (to avoid public IPs)
 
-## 📊 Kafka Consumer Groups
+## Troubleshooting
 
-### How It Works
+### Services Not Starting
 
-Consumer groups enable horizontal scaling of event processing:
+1. Check ECS service logs:
+```powershell
+aws logs tail /ecs/event-platform-telemetry-api --region us-east-1 --since 10m
+```
 
-- **Same Group**: Multiple consumers in the same group share partitions
-- **Load Balancing**: Kafka automatically distributes partitions across consumers
-- **Fault Tolerance**: If a consumer fails, its partitions are reassigned to other consumers
+2. Verify images exist in ECR:
+```powershell
+aws ecr describe-images --repository-name event-platform-telemetry-api --region us-east-1
+```
 
-### Example
+3. Check task status:
+```powershell
+aws ecs list-tasks --cluster event-platform-cluster --service-name event-platform-telemetry-api --region us-east-1
+```
 
-With 2 consumer instances in group `event-processors`:
-- Kafka topic has 4 partitions
-- Consumer 1 processes partitions 0, 1
-- Consumer 2 processes partitions 2, 3
-- If Consumer 1 fails, Consumer 2 takes over partitions 0, 1
+### Kafka Connection Issues
 
-### At-Least-Once Semantics
+1. Verify Kafka EC2 instance is running:
+```powershell
+aws ec2 describe-instances --filters "Name=tag:Name,Values=kafka-redpanda" --region us-east-1
+```
 
-- Consumer commits offset **after** successful write to DynamoDB
-- If consumer crashes before commit, message is reprocessed
-- Idempotent writes prevent duplicate data in DynamoDB
+2. Check security group rules allow port 9092
+3. Verify Kafka IP in task definition environment variables
 
-## 🗄️ Hot vs Cold Storage
+### Authentication Errors
 
-### Hot Storage (DynamoDB)
+1. Verify JWT token is valid and not expired
+2. Check JWT secret key matches in all services
+3. Ensure `audience` claim matches `JWT_AUDIENCE` environment variable
 
-**Purpose**: Fast, queryable access to recent events
+## Cost Optimization
 
-**Characteristics**:
-- Normalized schema for efficient queries
-- Global Secondary Indexes (GSI) for filtering
-- Optimized for read operations
-- Cost-effective for frequently accessed data
+- Use ECS Fargate Spot for non-critical workloads
+- Enable DynamoDB on-demand billing
+- Use S3 Intelligent-Tiering for cold storage
+- Set up auto-scaling based on metrics
+- Use CloudWatch Logs retention policies
 
-**Use Cases**:
-- Real-time dashboards
-- User activity tracking
-- Recent event queries
+## License
 
-### Cold Storage (S3)
+This project is provided as-is for demonstration purposes.
 
-**Purpose**: Long-term archival and batch analytics
+## Support
 
-**Characteristics**:
-- Raw JSON format (no schema changes)
-- Organized by date for efficient retrieval
-- Cost-effective for large volumes
-- Suitable for data lake patterns
-
-**Use Cases**:
-- Historical analysis
-- Compliance and auditing
-- Data science workflows
-- Backup and recovery
-
-## 🚢 AWS Deployment
-
-See [infra/aws.md](infra/aws.md) for complete deployment guide.
-
-### Free Tier Considerations
-
-- **DynamoDB**: 25 GB storage, 25 read/write units
-- **S3**: 5 GB storage, 20,000 GET requests
-- **EC2**: t2.micro instance (if needed)
-
-### Quick AWS Setup
-
-1. Create S3 bucket:
-   ```bash
-   aws s3 mb s3://event-platform-raw-events --region us-east-1
-   ```
-
-2. Configure IAM permissions (see `infra/aws.md`)
-
-3. Update `.env` with AWS credentials
-
-4. Deploy:
-   ```bash
-   docker-compose up -d
-   ```
-
-## 🧪 Testing
-
-### Manual Testing
-
-1. **Send events**:
-   ```bash
-   for i in {1..10}; do
-     curl -X POST http://localhost:8000/events \
-       -H "Content-Type: application/json" \
-       -d "{\"event_type\": \"page_view\", \"user_id\": \"user$i\", \"payload\": {\"page\": \"/page$i\"}}"
-   done
-   ```
-
-2. **Query via GraphQL**:
-   ```bash
-   curl -X POST http://localhost:8001/graphql \
-     -H "Content-Type: application/json" \
-     -d '{"query": "{ latestEvents(limit: 10) { eventId eventType userId } }"}'
-   ```
-
-3. **Check DynamoDB**:
-   ```bash
-   aws dynamodb scan --table-name EventsHot --limit 5
-   ```
-
-4. **Check S3**:
-   ```bash
-   aws s3 ls s3://event-platform-raw-events/events/ --recursive
-   ```
-
-## 📈 Scalability Model
-
-### Horizontal Scaling
-
-- **Producer**: Stateless, scale by adding instances behind load balancer
-- **Consumer**: Scale by adding more instances to consumer group
-- **GraphQL API**: Stateless, scale by adding instances
-
-### Vertical Scaling
-
-- **Kafka/Redpanda**: Increase partitions for higher throughput
-- **DynamoDB**: Adjust read/write capacity or use on-demand
-- **S3**: Automatically scales
-
-### Performance Considerations
-
-- **Kafka Partitions**: More partitions = more parallelism
-- **Consumer Instances**: Should not exceed partition count
-- **DynamoDB GSI**: Enables efficient filtering without full table scans
-- **S3 Batching**: Consider batching writes for high-volume scenarios
-
-## 🛡️ Error Handling
-
-### Dead Letter Queue (DLQ)
-
-Failed messages are sent to `events.dlq` topic with error metadata:
-- Original message preserved
-- Error details included
-- Timestamp of failure
-- Can be reprocessed later
-
-### Idempotency
-
-- DynamoDB writes check for existing events
-- Prevents duplicate data from retries
-- Uses `event_id` + `timestamp` as composite key
-
-### Graceful Degradation
-
-- S3 write failures don't block processing
-- Consumer continues even if one storage backend fails
-- Errors logged for monitoring
-
-## 🔍 Monitoring
-
-### Logs
-
-All services use structured logging:
-- **Development**: Colored console output
-- **Production**: JSON format for log aggregation
-
-### Key Metrics to Monitor
-
-- **Producer**: Event ingestion rate, Kafka publish latency
-- **Consumer**: Processing rate, consumer lag, error rate
-- **GraphQL**: Query latency, error rate
-- **DynamoDB**: Read/write capacity, throttling
-- **S3**: Request count, storage usage
-
-## 🎯 Trade-offs and Future Improvements
-
-### Current Trade-offs
-
-1. **At-Least-Once**: Simpler than exactly-once, acceptable for analytics
-2. **Scan for Latest Events**: Not optimal for large tables (consider time-based partitioning)
-3. **Single Kafka Topic**: Could partition by event type for better isolation
-4. **No Authentication**: Add API keys/JWT for production
-
-### Future Improvements
-
-1. **Exactly-Once Semantics**: Use Kafka transactions for critical events
-2. **Event Schema Registry**: Validate event schemas
-3. **Caching Layer**: Redis for frequently accessed events
-4. **Stream Processing**: Add Kafka Streams or Flink for real-time aggregations
-5. **Monitoring**: Integrate Prometheus/Grafana
-6. **API Authentication**: OAuth2/JWT for secure access
-7. **Event Replay**: Ability to reprocess events from S3
-8. **Multi-Region**: Deploy across AWS regions for disaster recovery
-9. **Data Retention**: TTL policies for DynamoDB, lifecycle policies for S3
-10. **GraphQL Subscriptions**: Real-time event streaming via WebSockets
-
-## 📚 Technology Stack
-
-- **Python 3.11**: Modern Python with async/await
-- **FastAPI**: High-performance async web framework
-- **Strawberry GraphQL**: Type-safe GraphQL implementation
-- **Redpanda**: Kafka-compatible message broker (lighter than Kafka)
-- **aiokafka**: Async Kafka client
-- **DynamoDB**: NoSQL database for hot storage
-- **S3**: Object storage for cold storage
-- **boto3/aioboto3**: AWS SDK for Python
-- **Docker**: Containerization
-- **structlog**: Structured logging
-
-## 📝 License
-
-This project is a demonstration/portfolio piece.
-
-## 🤝 Contributing
-
-This is a demo project, but suggestions and improvements are welcome!
-
----
-
-**Built for demonstrating event-driven architecture, microservices, and cloud-native patterns.**
+For issues or questions, check:
+- AWS CloudWatch Logs for service errors
+- ECS service events for deployment issues
+- Prometheus metrics for performance issues

@@ -8,6 +8,7 @@ from typing import Optional
 
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 from aiokafka.errors import KafkaError
+from prometheus_client import Counter, Histogram, start_http_server
 
 from consumer.dynamodb import DynamoDBWriter
 from consumer.models import EventModel
@@ -27,6 +28,19 @@ DYNAMODB_TABLE = os.getenv("DYNAMODB_TABLE", "EventsHot")
 S3_BUCKET = os.getenv("S3_BUCKET", "event-platform-raw-events")
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
 AWS_PROFILE = os.getenv("AWS_PROFILE")
+METRICS_PORT = int(os.getenv("METRICS_PORT", "8002"))
+
+# Prometheus metrics
+MESSAGE_PROCESSED = Counter(
+    "consumer_messages_processed_total",
+    "Total number of messages processed",
+    ["topic", "status"],
+)
+MESSAGE_PROCESSING_SECONDS = Histogram(
+    "consumer_message_processing_seconds",
+    "Time spent processing a single message",
+    ["topic"],
+)
 
 # Initialize writers
 dynamodb_writer = DynamoDBWriter(
@@ -97,10 +111,12 @@ async def process_message(message_value: dict) -> bool:
     Returns:
         True if successful, False otherwise
     """
+    start_time = time.perf_counter()
+    status_label = "success"
     try:
         # Parse event
         event = EventModel.from_dict(message_value)
-        
+
         # Write to DynamoDB (hot storage)
         dynamodb_success = await dynamodb_writer.write_event(event)
         if not dynamodb_success:
@@ -109,7 +125,7 @@ async def process_message(message_value: dict) -> bool:
                 event_id=str(event.event_id),
                 reason="event_already_exists",
             )
-        
+
         # Write to S3 (cold storage) - graceful degradation
         s3_success = await s3_writer.write_event(event)
         if not s3_success:
@@ -118,7 +134,7 @@ async def process_message(message_value: dict) -> bool:
                 event_id=str(event.event_id),
             )
             # Continue processing even if S3 fails
-        
+
         logger.info(
             "event_processed",
             event_id=str(event.event_id),
@@ -127,10 +143,11 @@ async def process_message(message_value: dict) -> bool:
             dynamodb_success=dynamodb_success,
             s3_success=s3_success,
         )
-        
+
         return True
-        
+
     except Exception as e:
+        status_label = "error"
         logger.error(
             "event_processing_failed",
             event_id=str(message_value.get("event_id", "unknown")),
@@ -138,6 +155,10 @@ async def process_message(message_value: dict) -> bool:
         )
         await send_to_dlq(message_value, str(e))
         return False
+    finally:
+        duration = time.perf_counter() - start_time
+        MESSAGE_PROCESSING_SECONDS.labels(topic=KAFKA_TOPIC).observe(duration)
+        MESSAGE_PROCESSED.labels(topic=KAFKA_TOPIC, status=status_label).inc()
 
 
 async def consume_events() -> None:
@@ -221,7 +242,11 @@ def setup_signal_handlers() -> None:
 async def main() -> None:
     """Main entry point."""
     setup_signal_handlers()
-    
+
+    # Start Prometheus metrics HTTP server
+    start_http_server(METRICS_PORT)
+    logger.info("metrics_server_started", port=METRICS_PORT)
+
     try:
         await consume_events()
     except KeyboardInterrupt:

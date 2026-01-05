@@ -1,0 +1,60 @@
+{
+  "family": "event-platform-kafka",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "1024",
+  "memory": "2048",
+  "executionRoleArn": "arn:aws:iam::410772457866:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::410772457866:role/ecsTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "kafka",
+      "image": "redpandadata/redpanda:v23.2.11",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 9092,
+          "protocol": "tcp"
+        },
+        {
+          "containerPort": 8081,
+          "protocol": "tcp"
+        },
+        {
+          "containerPort": 8082,
+          "protocol": "tcp"
+        }
+      ],
+      "command": [
+        "redpanda",
+        "start",
+        "--kafka-addr",
+        "internal://0.0.0.0:9092",
+        "--advertise-kafka-addr",
+        "internal://0.0.0.0:9092",
+        "--smp",
+        "1",
+        "--memory",
+        "1G",
+        "--mode",
+        "dev-container"
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/event-platform-kafka",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "healthCheck": {
+        "command": ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy' || exit 1"],
+        "interval": 30,
+        "timeout": 10,
+        "retries": 3,
+        "startPeriod": 120
+      }
+    }
+  ]
+}
+

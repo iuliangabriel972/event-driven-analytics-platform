@@ -1,0 +1,19 @@
+{
+  "serviceName": "event-platform-consumer",
+  "cluster": "event-platform-cluster",
+  "taskDefinition": "event-platform-consumer",
+  "desiredCount": 2,
+  "launchType": "FARGATE",
+  "networkConfiguration": {
+    "awsvpcConfiguration": {
+      "subnets": ["<SUBNET-ID-1>", "<SUBNET-ID-2>"],
+      "securityGroups": ["<SECURITY-GROUP-ID>"],
+      "assignPublicIp": "DISABLED"
+    }
+  },
+  "deploymentConfiguration": {
+    "maximumPercent": 200,
+    "minimumHealthyPercent": 50
+  }
+}
+

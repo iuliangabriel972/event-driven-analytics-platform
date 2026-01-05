@@ -1,0 +1,52 @@
+{
+    "executionRoleArn":  "arn:aws:iam::410772457866:role/ecsTaskExecutionRole",
+    "networkMode":  "awsvpc",
+    "cpu":  "512",
+    "requiresCompatibilities":  [
+                                    "FARGATE"
+                                ],
+    "containerDefinitions":  [
+                                 {
+                                     "healthCheck":  {
+                                                         "retries":  3,
+                                                         "command":  [
+                                                                         "CMD-SHELL",
+                                                                         "wget --no-verbose --tries=1 --spider http://localhost:9090/-/healthy || exit 1"
+                                                                     ],
+                                                         "timeout":  5,
+                                                         "interval":  30,
+                                                         "startPeriod":  60
+                                                     },
+                                     "logConfiguration":  {
+                                                              "logDriver":  "awslogs",
+                                                              "options":  {
+                                                                              "awslogs-region":  "us-east-1",
+                                                                              "awslogs-stream-prefix":  "ecs",
+                                                                              "awslogs-group":  "/ecs/event-platform-prometheus"
+                                                                          }
+                                                          },
+                                     "essential":  true,
+                                     "name":  "prometheus",
+                                     "environment":  [
+                                                         {
+                                                             "value":  "production",
+                                                             "name":  "ENVIRONMENT"
+                                                         }
+                                                     ],
+                                     "portMappings":  [
+                                                          {
+                                                              "protocol":  "tcp",
+                                                              "containerPort":  9090
+                                                          }
+                                                      ],
+                                     "command":  [
+                                                     "--config.file=/etc/prometheus/prometheus.yml",
+                                                     "--storage.tsdb.path=/prometheus"
+                                                 ],
+                                     "image":  "prom/prometheus:v2.51.2"
+                                 }
+                             ],
+    "family":  "event-platform-prometheus",
+    "taskRoleArn":  "arn:aws:iam::410772457866:role/ecsTaskRole",
+    "memory":  "1024"
+}

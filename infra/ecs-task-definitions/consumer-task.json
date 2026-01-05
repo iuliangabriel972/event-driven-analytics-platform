@@ -1,0 +1,59 @@
+{
+  "family": "event-platform-consumer",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "arn:aws:iam::<ACCOUNT-ID>:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::<ACCOUNT-ID>:role/ecsTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "consumer",
+      "image": "<ACCOUNT-ID>.dkr.ecr.us-east-1.amazonaws.com/event-platform-consumer:latest",
+      "essential": true,
+      "environment": [
+        {
+          "name": "KAFKA_BOOTSTRAP_SERVERS",
+          "value": "<KAFKA-BROKER>:9092"
+        },
+        {
+          "name": "KAFKA_TOPIC",
+          "value": "events.raw"
+        },
+        {
+          "name": "KAFKA_DLQ_TOPIC",
+          "value": "events.dlq"
+        },
+        {
+          "name": "KAFKA_CONSUMER_GROUP",
+          "value": "event-processors"
+        },
+        {
+          "name": "DYNAMODB_TABLE",
+          "value": "EventsHot"
+        },
+        {
+          "name": "S3_BUCKET",
+          "value": "event-platform-raw-events"
+        },
+        {
+          "name": "AWS_REGION",
+          "value": "us-east-1"
+        },
+        {
+          "name": "ENVIRONMENT",
+          "value": "production"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/event-platform-consumer",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}
+

@@ -1,0 +1,27 @@
+{
+    "launchType":  "FARGATE",
+    "healthCheckGracePeriodSeconds":  60,
+    "serviceName":  "event-platform-grafana",
+    "cluster":  "event-platform-cluster",
+    "taskDefinition":  "event-platform-grafana",
+    "loadBalancers":  [
+                          {
+                              "containerPort":  3000,
+                              "targetGroupArn":  "arn:aws:elasticloadbalancing:us-east-1:410772457866:targetgroup/event-platform-grafana/5f032f10bad2b8aa",
+                              "containerName":  "grafana"
+                          }
+                      ],
+    "desiredCount":  1,
+    "networkConfiguration":  {
+                                 "awsvpcConfiguration":  {
+                                                             "subnets":  [
+                                                                             "subnet-0322341a6fc93eee8",
+                                                                             "subnet-06fdadd8df2bdfeff"
+                                                                         ],
+                                                             "assignPublicIp":  "ENABLED",
+                                                             "securityGroups":  [
+                                                                                    "sg-0360789235f0ebb9a"
+                                                                                ]
+                                                         }
+                             }
+}

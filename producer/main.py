@@ -4,11 +4,13 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.responses import JSONResponse
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from producer.kafka import KafkaProducer
 from producer.schemas import EventEnvelope, EventRequest, EventResponse
+from shared.auth import get_current_user
 from shared.logger import configure_logging, get_logger
 
 # Configure logging
@@ -20,7 +22,10 @@ kafka_bootstrap = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
 kafka_topic = os.getenv("KAFKA_TOPIC", "events.raw")
 kafka_producer = KafkaProducer(bootstrap_servers=kafka_bootstrap, topic=kafka_topic)
 
+# Instrument with Prometheus BEFORE creating app
+instrumentator = Instrumentator()
 
+# Create FastAPI app with lifespan
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifecycle."""
@@ -30,13 +35,15 @@ async def lifespan(app: FastAPI):
         logger.info("producer_service_started", port=8000)
     except Exception as e:
         logger.error("producer_service_startup_failed", error=str(e))
-        raise
-    
-    yield
-    
-    # Shutdown
-    await kafka_producer.disconnect()
-    logger.info("producer_service_shutdown")
+        logger.warning("producer_continuing_without_kafka", error=str(e))
+        # Don't raise - allow service to start and retry connection on first request
+
+    try:
+        yield
+    finally:
+        # Shutdown
+        await kafka_producer.disconnect()
+        logger.info("producer_service_shutdown")
 
 
 app = FastAPI(
@@ -46,6 +53,24 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Instrument with Prometheus AFTER app creation but BEFORE routes
+instrumentator.instrument(app).expose(app, include_in_schema=False)
+
+
+@app.get("/")
+async def root():
+    """Root endpoint with API information."""
+    return {
+        "service": "Event Producer API",
+        "version": "1.0.0",
+        "endpoints": {
+            "health": "/health",
+            "events": "/events",
+            "metrics": "/metrics"
+        },
+        "status": "operational"
+    }
+
 
 @app.get("/health")
 async def health_check():
@@ -54,7 +79,10 @@ async def health_check():
 
 
 @app.post("/events", response_model=EventResponse, status_code=status.HTTP_202_ACCEPTED)
-async def ingest_event(event: EventRequest) -> EventResponse:
+async def ingest_event(
+    event: EventRequest,
+    user=Depends(get_current_user),
+) -> EventResponse:
     """
     Ingest an event into the platform.
     
@@ -90,8 +118,9 @@ async def ingest_event(event: EventRequest) -> EventResponse:
             event_id=str(event_id),
             event_type=event.event_type,
             user_id=event.user_id,
+            auth_sub=user.get("sub"),
         )
-        
+
         return EventResponse(
             event_id=event_id,
             status="accepted",

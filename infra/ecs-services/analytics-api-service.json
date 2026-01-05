@@ -1,0 +1,23 @@
+{
+  "serviceName": "event-platform-analytics-api",
+  "cluster": "event-platform-cluster",
+  "taskDefinition": "event-platform-analytics-api",
+  "desiredCount": 1,
+  "launchType": "FARGATE",
+  "networkConfiguration": {
+    "awsvpcConfiguration": {
+      "subnets": ["subnet-0322341a6fc93eee8", "subnet-0c01dab45aad414ea"],
+      "securityGroups": ["sg-0360789235f0ebb9a"],
+      "assignPublicIp": "ENABLED"
+    }
+  },
+  "loadBalancers": [
+    {
+      "targetGroupArn": "arn:aws:elasticloadbalancing:us-east-1:410772457866:targetgroup/event-platform-analytics-api/e0c6f9fcc2228841",
+      "containerName": "analytics-api",
+      "containerPort": 8001
+    }
+  ],
+  "healthCheckGracePeriodSeconds": 60
+}
+
