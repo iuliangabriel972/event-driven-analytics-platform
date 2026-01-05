@@ -93,6 +93,9 @@ class S3Writer:
         """
         Write raw event JSON to S3.
         
+        Uses to_json_dict() to preserve floats (not Decimals) in S3.
+        S3 stores raw JSON for analytics/archival, while DynamoDB uses Decimals.
+        
         Args:
             event: Event model to write
             
@@ -103,7 +106,8 @@ class S3Writer:
         async with session.client("s3") as s3:
             try:
                 key = self._generate_key(event)
-                event_json = json.dumps(event.to_dynamodb_item(), default=str)
+                # Use to_json_dict() to keep floats (not Decimals) in S3
+                event_json = json.dumps(event.to_json_dict(), default=str)
                 
                 await s3.put_object(
                     Bucket=self.bucket_name,

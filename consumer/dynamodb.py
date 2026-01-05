@@ -1,4 +1,5 @@
 """DynamoDB writer for storing normalized events."""
+import json
 import os
 from typing import Optional
 
@@ -41,6 +42,23 @@ class DynamoDBWriter:
                 session_kwargs["profile_name"] = self.aws_profile
             self.session = aioboto3.Session(**session_kwargs)
         return self.session
+    
+    def _ensure_no_floats(self, obj):
+        """
+        Recursively check and convert any remaining floats to Decimal.
+        
+        This is a safety check to ensure no floats reach DynamoDB,
+        even if the model's conversion logic missed any.
+        """
+        from decimal import Decimal
+        if isinstance(obj, float):
+            return Decimal(str(obj))
+        elif isinstance(obj, dict):
+            return {k: self._ensure_no_floats(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [self._ensure_no_floats(item) for item in obj]
+        else:
+            return obj
     
     async def ensure_table_exists(self) -> None:
         """Create DynamoDB table if it doesn't exist (idempotent)."""
@@ -154,6 +172,8 @@ class DynamoDBWriter:
             # Write event
             try:
                 item = event.to_dynamodb_item()
+                # Safety check: ensure no floats remain (DynamoDB doesn't support float type)
+                item = self._ensure_no_floats(item)
                 await table.put_item(Item=item)
                 logger.info(
                     "event_written_to_dynamodb",
@@ -163,10 +183,14 @@ class DynamoDBWriter:
                 )
                 return True
             except ClientError as e:
+                error_msg = str(e)
                 logger.error(
                     "dynamodb_write_failed",
                     event_id=str(event.event_id),
-                    error=str(e),
+                    error=error_msg,
                 )
+                # If it's a float type error, log the item structure for debugging
+                if "Float types are not supported" in error_msg:
+                    logger.error("dynamodb_item_debug", item=json.dumps(item, default=str))
                 raise
 

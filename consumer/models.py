@@ -35,6 +35,16 @@ class EventModel:
             "payload": converted_payload,
         }
     
+    def to_json_dict(self) -> Dict[str, Any]:
+        """Convert to JSON-serializable dictionary format (keeps floats as floats for S3)."""
+        return {
+            "event_id": str(self.event_id),
+            "timestamp": self.timestamp.isoformat(),
+            "event_type": self.event_type,
+            "user_id": self.user_id,
+            "payload": self.payload,
+        }
+    
     @staticmethod
     def _convert_floats_to_decimal(obj: Any) -> Any:
         """Recursively convert float values to Decimal for DynamoDB compatibility."""
