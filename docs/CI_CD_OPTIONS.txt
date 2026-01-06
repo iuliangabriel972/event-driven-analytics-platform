@@ -1,0 +1,428 @@
+================================================================================
+CI/CD PIPELINE OPTIONS FOR AWS ECS DEPLOYMENT
+================================================================================
+
+CURRENT ISSUE:
+--------------
+GitHub Actions workflow fails because it needs AWS credentials stored as
+GitHub Secrets. This is a security concern for personal projects.
+
+
+SOLUTION 1: GITHUB ACTIONS WITH AWS CREDENTIALS (SECURE)
+---------------------------------------------------------
+Status: Best for production, requires setup
+
+Steps:
+1. Create IAM User for GitHub Actions:
+   - Go to AWS IAM Console
+   - Create new user: "github-actions-deployer"
+   - Attach policies:
+     * AmazonEC2ContainerRegistryFullAccess
+     * AmazonECS_FullAccess
+     * CloudWatchLogsReadOnlyAccess
+   - Create access key → Save credentials
+
+2. Add Secrets to GitHub:
+   Go to: https://github.com/iuliangabriel972/event-driven-analytics-platform/settings/secrets/actions
+   Add:
+   - AWS_ACCESS_KEY_ID
+   - AWS_SECRET_ACCESS_KEY  
+   - AWS_REGION (us-east-1)
+   - AWS_ACCOUNT_ID (410772457866)
+
+3. Restore workflow:
+   git restore .github/workflows/deploy.yml
+   git add .github/workflows/deploy.yml
+   git commit -m "feat: Re-enable GitHub Actions with AWS secrets"
+   git push
+
+Pros:
+  ✅ Automatic deployment on every push to main
+  ✅ Standard industry practice
+  ✅ Free for public repos
+  ✅ Build logs in GitHub
+
+Cons:
+  ⚠️ Requires storing AWS credentials in GitHub
+  ⚠️ Need to rotate credentials periodically
+  ⚠️ All repo collaborators with admin access can see secrets
+
+
+SOLUTION 2: AWS CODEPIPELINE + CODEBUILD (AWS-NATIVE)
+------------------------------------------------------
+Status: Most secure, fully AWS-managed
+
+Architecture:
+  GitHub → CodePipeline → CodeBuild → ECR → ECS
+
+Steps:
+1. Create CodeBuild project (buildspec.yml already exists)
+2. Create CodePipeline:
+   - Source: GitHub (OAuth connection)
+   - Build: CodeBuild
+   - Deploy: ECS (rolling update)
+
+3. Configure IAM roles (no credentials needed!)
+
+Pros:
+  ✅ No AWS credentials in GitHub
+  ✅ IAM roles instead of access keys
+  ✅ Integrated with AWS ecosystem
+  ✅ Build artifacts stored in S3
+  ✅ CloudWatch logs
+
+Cons:
+  ⚠️ More complex setup
+  ⚠️ Costs money (small, but not free)
+  ⚠️ Build logs in AWS Console (not GitHub)
+
+Setup Script:
+  aws codepipeline create-pipeline --cli-input-json file://infra/pipeline.json
+
+
+SOLUTION 3: MANUAL DEPLOYMENT SCRIPT (CURRENT)
+-----------------------------------------------
+Status: Working, simple, no automation
+
+Current Script:
+  scripts/build-and-push-images.ps1
+
+Usage:
+  # Build and push all images
+  .\scripts\build-and-push-images.ps1
+
+  # Force ECS services to redeploy
+  aws ecs update-service --cluster event-platform-cluster \
+    --service event-platform-telemetry-api --force-new-deployment
+
+  aws ecs update-service --cluster event-platform-cluster \
+    --service event-platform-processor --force-new-deployment
+
+  aws ecs update-service --cluster event-platform-cluster \
+    --service event-platform-analytics-api --force-new-deployment
+
+Pros:
+  ✅ Simple
+  ✅ Full control
+  ✅ No secrets stored anywhere
+  ✅ Works locally
+
+Cons:
+  ⚠️ Manual process
+  ⚠️ Requires local Docker Desktop
+  ⚠️ Requires AWS CLI configured
+
+
+SOLUTION 4: GITHUB ACTIONS WITH OIDC (RECOMMENDED FOR PRODUCTION)
+------------------------------------------------------------------
+Status: Best security, no long-lived credentials
+
+How it works:
+  GitHub Actions ↔ AWS STS (temporary credentials) → ECR/ECS
+
+Steps:
+1. Configure AWS IAM OIDC Provider:
+   aws iam create-open-id-connect-provider \
+     --url https://token.actions.githubusercontent.com \
+     --client-id-list sts.amazonaws.com
+
+2. Create IAM Role with trust policy for GitHub
+3. Update workflow to use OIDC instead of access keys
+
+Example workflow change:
+  - name: Configure AWS credentials
+    uses: aws-actions/configure-aws-credentials@v4
+    with:
+      role-to-assume: arn:aws:iam::410772457866:role/GitHubActionsRole
+      aws-region: us-east-1
+      # No access keys needed!
+
+Pros:
+  ✅✅ Most secure (no long-lived credentials)
+  ✅ Automatic credential rotation
+  ✅ Auditable via CloudTrail
+  ✅ Free with GitHub Actions
+
+Cons:
+  ⚠️ More complex initial setup
+  ⚠️ Requires understanding of IAM OIDC
+
+
+RECOMMENDATION FOR THIS PROJECT:
+---------------------------------
+For Interview/Demo: Solution 3 (Manual) ✅ Current setup is fine
+For Production: Solution 4 (OIDC) or Solution 2 (CodePipeline)
+
+Why manual is OK for now:
+  - Full control during demo
+  - No security concerns with credentials
+  - Easy to explain in interview
+  - Can be upgraded to automated CI/CD later
+
+
+================================================================================
+DATA ENGINEERING FEATURES - EXPANSION IDEAS
+================================================================================
+
+IDEA 1: AWS GLUE ETL PIPELINE
+------------------------------
+Use Case: Transform raw S3 events into analytics-ready format
+
+Architecture:
+  S3 Raw Events → Glue Crawler → Glue ETL Job → S3 Parquet → Athena
+
+Implementation:
+1. Glue Crawler scans S3 bucket daily
+2. Discovers schema from JSON files
+3. Glue ETL job:
+   - Converts JSON to Parquet (90% compression)
+   - Partitions by event_type, date
+   - Deduplicates events
+   - Enriches with metadata
+
+Benefits:
+  ✅ Serverless (no infra to manage)
+  ✅ Standard data engineering tool
+  ✅ Parquet format = 10x faster queries
+  ✅ Integration with Athena, QuickSight
+
+Code Example:
+  import sys
+  from awsglue.transforms import *
+  from awsglue.utils import getResolvedOptions
+  from pyspark.context import SparkContext
+  from awsglue.context import GlueContext
+  
+  glueContext = GlueContext(SparkContext.getOrCreate())
+  
+  # Read from S3
+  datasource = glueContext.create_dynamic_frame.from_options(
+      "s3",
+      {"paths": ["s3://event-platform-raw-events/events/"]},
+      "json"
+  )
+  
+  # Transform
+  transformed = ApplyMapping.apply(
+      frame=datasource,
+      mappings=[
+          ("event_id", "string", "event_id", "string"),
+          ("event_type", "string", "event_type", "string"),
+          ("user_id", "string", "user_id", "string"),
+          ("timestamp", "string", "timestamp", "timestamp"),
+      ]
+  )
+  
+  # Write to S3 as Parquet
+  glueContext.write_dynamic_frame.from_options(
+      frame=transformed,
+      connection_type="s3",
+      connection_options={"path": "s3://event-platform-processed/"},
+      format="parquet",
+      format_options={"compression": "snappy"}
+  )
+
+
+IDEA 2: AWS STEP FUNCTIONS ORCHESTRATION
+-----------------------------------------
+Use Case: Orchestrate multi-step data pipelines
+
+Example Pipeline:
+  1. Check for new S3 files
+  2. Trigger Glue job
+  3. Wait for completion
+  4. Run data quality checks
+  5. If pass → Load to Redshift
+  6. If fail → Send SNS alert
+
+State Machine JSON:
+  {
+    "StartAt": "CheckNewFiles",
+    "States": {
+      "CheckNewFiles": {
+        "Type": "Task",
+        "Resource": "arn:aws:lambda:...:CheckS3Files",
+        "Next": "RunGlueJob"
+      },
+      "RunGlueJob": {
+        "Type": "Task",
+        "Resource": "arn:aws:states:::glue:startJobRun.sync",
+        "Parameters": {
+          "JobName": "event-transformation"
+        },
+        "Next": "DataQualityCheck"
+      },
+      "DataQualityCheck": {
+        "Type": "Task",
+        "Resource": "arn:aws:lambda:...:CheckDataQuality",
+        "Next": "QualityPassed?"
+      },
+      "QualityPassed?": {
+        "Type": "Choice",
+        "Choices": [
+          {
+            "Variable": "$.quality",
+            "StringEquals": "PASS",
+            "Next": "LoadToRedshift"
+          }
+        ],
+        "Default": "SendAlert"
+      }
+    }
+  }
+
+Benefits:
+  ✅ Visual workflow editor
+  ✅ Built-in error handling
+  ✅ Retry logic
+  ✅ Serverless orchestration
+
+
+IDEA 3: REAL-TIME STREAM PROCESSING WITH AWS KINESIS DATA ANALYTICS
+--------------------------------------------------------------------
+Use Case: Real-time aggregations and anomaly detection
+
+Architecture:
+  Kafka → Kinesis Data Analytics → S3/DynamoDB/Lambda
+
+SQL Example (Kinesis Data Analytics):
+  -- Real-time aggregation: Events per user per minute
+  CREATE OR REPLACE STREAM event_counts AS
+  SELECT
+    user_id,
+    event_type,
+    COUNT(*) as event_count,
+    ROWTIME as window_time
+  FROM event_stream
+  GROUP BY
+    user_id,
+    event_type,
+    TUMBLING(PARTITION BY user_id RANGE INTERVAL '1' MINUTE);
+  
+  -- Anomaly detection: Users with >100 events/minute
+  CREATE OR REPLACE STREAM anomalies AS
+  SELECT *
+  FROM event_counts
+  WHERE event_count > 100;
+
+Benefits:
+  ✅ Sub-second latency
+  ✅ SQL for stream processing
+  ✅ Auto-scaling
+  ✅ No server management
+
+
+IDEA 4: APACHE AIRFLOW ON AWS MWAA (Managed Workflows)
+-------------------------------------------------------
+Use Case: Complex data pipelines with dependencies
+
+Example DAG:
+  from airflow import DAG
+  from airflow.providers.amazon.aws.operators.glue import GlueJobOperator
+  from airflow.providers.amazon.aws.operators.athena import AthenaOperator
+  from datetime import datetime
+  
+  with DAG(
+      "event_processing_pipeline",
+      start_date=datetime(2026, 1, 1),
+      schedule_interval="0 2 * * *",  # Daily at 2 AM
+      catchup=False,
+  ) as dag:
+      
+      # Step 1: Run Glue ETL
+      transform_events = GlueJobOperator(
+          task_id="transform_events",
+          job_name="event-transformation",
+      )
+      
+      # Step 2: Create Athena table
+      create_table = AthenaOperator(
+          task_id="create_table",
+          query="CREATE EXTERNAL TABLE IF NOT EXISTS ...",
+          database="events_db",
+          output_location="s3://results/",
+      )
+      
+      # Step 3: Run aggregation
+      aggregate = AthenaOperator(
+          task_id="aggregate_daily_stats",
+          query="""
+              INSERT INTO daily_stats
+              SELECT date, event_type, COUNT(*) as count
+              FROM events
+              WHERE date = '{{ ds }}'
+              GROUP BY date, event_type
+          """,
+          database="events_db",
+      )
+      
+      transform_events >> create_table >> aggregate
+
+Benefits:
+  ✅ Python-based DAGs
+  ✅ Rich UI for monitoring
+  ✅ Extensive operator library
+  ✅ Managed by AWS (no server setup)
+
+
+IDEA 5: DATA QUALITY CHECKS WITH AWS DEEQU
+-------------------------------------------
+Use Case: Automated data validation
+
+Implementation:
+  from pydeequ.checks import Check, CheckLevel
+  from pydeequ.verification import VerificationSuite
+  
+  check = Check(spark, CheckLevel.Error, "Event Data Quality")
+  
+  verification = VerificationSuite(spark) \
+      .onData(events_df) \
+      .addCheck(
+          check.hasSize(lambda x: x > 0)
+               .isComplete("event_id")
+               .isUnique("event_id")
+               .isNonNegative("timestamp")
+               .isContainedIn("event_type", ["user.action", "system.event"])
+      ) \
+      .run()
+  
+  if verification.status == "Success":
+      print("✅ All quality checks passed")
+  else:
+      print("❌ Data quality issues detected")
+      # Send alert, stop pipeline
+
+
+RECOMMENDED NEXT STEPS (PRIORITY ORDER):
+-----------------------------------------
+1. ✅ Keep current manual deployment (working)
+2. 🎯 Add AWS Glue for S3 → Parquet transformation (High value, low effort)
+3. 🎯 Add Athena for SQL queries on S3 data (Complements Glue)
+4. 🎯 Setup Step Functions for pipeline orchestration (Shows advanced skills)
+5. ⏰ Implement OIDC CI/CD when moving to production
+
+Why Glue + Athena First:
+  - Most common in data engineering roles
+  - Easy to demonstrate in interview
+  - Natural extension of current S3 storage
+  - Low cost (serverless, pay-per-query)
+  - Shows understanding of data lake architecture
+
+
+INTERVIEW TALKING POINTS:
+--------------------------
+"I designed this system with a data lake architecture in mind. Raw events are
+stored in S3 as JSON for flexibility. In production, I'd add AWS Glue to
+transform these into Parquet format, reducing storage costs by 90% and query
+times by 10x. We can then use Athena for ad-hoc SQL analytics or connect to
+QuickSight for dashboards.
+
+For more complex pipelines, I'd use Step Functions to orchestrate multiple
+Glue jobs with proper error handling and retries. This follows the medallion
+architecture: Bronze (raw JSON) → Silver (cleaned Parquet) → Gold (aggregated
+tables).
+
+The current Kafka → DynamoDB path serves real-time operational queries, while
+the S3 → Glue → Athena path serves analytical queries. This is a classic
+lambda architecture approach."
+
