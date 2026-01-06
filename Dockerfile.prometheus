@@ -3,5 +3,5 @@ FROM prom/prometheus:v2.51.2
 # Copy Prometheus config directly into image
 COPY infra/monitoring/prometheus-ecs.yml /etc/prometheus/prometheus.yml
 
-# Use default Prometheus CMD from base image
-# Arguments are passed via ECS task definition if needed
+# Start Prometheus with config
+CMD ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus"]
