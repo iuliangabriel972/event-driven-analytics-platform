@@ -6,7 +6,7 @@ scrape_configs:
   - job_name: "telemetry-api"
     metrics_path: "/metrics"
     static_configs:
-      - targets: ["10.0.1.126:8000"]
+      - targets: ["event-platform-alb-95530675.us-east-1.elb.amazonaws.com:8000"]
         labels:
           service: "telemetry-api"
           environment: "production"
@@ -14,7 +14,7 @@ scrape_configs:
   - job_name: "analytics-api"
     metrics_path: "/metrics"
     static_configs:
-      - targets: ["10.0.1.198:8001"]
+      - targets: ["event-platform-alb-95530675.us-east-1.elb.amazonaws.com:8001"]
         labels:
           service: "analytics-api"
           environment: "production"
