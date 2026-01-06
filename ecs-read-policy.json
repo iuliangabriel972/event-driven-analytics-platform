@@ -1,13 +1,13 @@
 ﻿{
-  \"Version\": \"2012-10-17\",
-  \"Statement\": [
+  "Version": "2012-10-17",
+  "Statement": [
     {
-      \"Effect\": \"Allow\",
-      \"Action\": [
-        \"ecs:ListTasks\",
-        \"ecs:DescribeTasks\"
+      "Effect": "Allow",
+      "Action": [
+        "ecs:ListTasks",
+        "ecs:DescribeTasks"
       ],
-      \"Resource\": \"*\"
+      "Resource": "*"
     }
   ]
 }
