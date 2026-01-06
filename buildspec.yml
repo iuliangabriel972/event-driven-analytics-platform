@@ -7,40 +7,40 @@ phases:
       - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
       - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
       - IMAGE_TAG=${COMMIT_HASH:=latest}
-  
+      
   build:
     commands:
       - echo Build started on `date`
       - echo Building Telemetry API...
-      - docker build -f Dockerfile.producer -t $ECR_REPO_TELEMETRY:latest .
-      - docker tag $ECR_REPO_TELEMETRY:latest $ECR_REPO_TELEMETRY:$IMAGE_TAG
+      - docker build -f Dockerfile.producer -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/event-platform-telemetry-api:latest .
+      - docker tag $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/event-platform-telemetry-api:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/event-platform-telemetry-api:$IMAGE_TAG
       
-      - echo Building Processor...
-      - docker build -f Dockerfile.consumer -t $ECR_REPO_PROCESSOR:latest .
-      - docker tag $ECR_REPO_PROCESSOR:latest $ECR_REPO_PROCESSOR:$IMAGE_TAG
+      - echo Building Event Processor...
+      - docker build -f Dockerfile.consumer -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/event-platform-processor:latest .
+      - docker tag $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/event-platform-processor:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/event-platform-processor:$IMAGE_TAG
       
       - echo Building Analytics API...
-      - docker build -f Dockerfile.graphql -t $ECR_REPO_ANALYTICS:latest .
-      - docker tag $ECR_REPO_ANALYTICS:latest $ECR_REPO_ANALYTICS:$IMAGE_TAG
-  
+      - docker build -f Dockerfile.graphql -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/event-platform-analytics-api:latest .
+      - docker tag $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/event-platform-analytics-api:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/event-platform-analytics-api:$IMAGE_TAG
+      
   post_build:
     commands:
       - echo Build completed on `date`
-      - echo Pushing images to ECR...
-      - docker push $ECR_REPO_TELEMETRY:latest
-      - docker push $ECR_REPO_TELEMETRY:$IMAGE_TAG
-      - docker push $ECR_REPO_PROCESSOR:latest
-      - docker push $ECR_REPO_PROCESSOR:$IMAGE_TAG
-      - docker push $ECR_REPO_ANALYTICS:latest
-      - docker push $ECR_REPO_ANALYTICS:$IMAGE_TAG
+      - echo Pushing Docker images to ECR...
+      - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/event-platform-telemetry-api:latest
+      - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/event-platform-telemetry-api:$IMAGE_TAG
+      - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/event-platform-processor:latest
+      - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/event-platform-processor:$IMAGE_TAG
+      - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/event-platform-analytics-api:latest
+      - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/event-platform-analytics-api:$IMAGE_TAG
       
       - echo Updating ECS services...
       - aws ecs update-service --cluster event-platform-cluster --service event-platform-telemetry-api --force-new-deployment --region $AWS_DEFAULT_REGION
       - aws ecs update-service --cluster event-platform-cluster --service event-platform-processor --force-new-deployment --region $AWS_DEFAULT_REGION
       - aws ecs update-service --cluster event-platform-cluster --service event-platform-analytics-api --force-new-deployment --region $AWS_DEFAULT_REGION
       
-      - echo Deployment complete!
+      - echo Deployment initiated successfully!
 
-cache:
-  paths:
-    - '/root/.cache/pip/**/*'
+artifacts:
+  files:
+    - '**/*'
