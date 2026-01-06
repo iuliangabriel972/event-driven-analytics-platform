@@ -34,4 +34,5 @@ Thumbs.db
 # Documentation files (keep locally only)
 *.md
 *.txt
+!requirements.txt
 
