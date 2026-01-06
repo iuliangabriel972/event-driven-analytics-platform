@@ -9,7 +9,7 @@
   "containerDefinitions": [
     {
       "name": "prometheus",
-      "image": "410772457866.dkr.ecr.us-east-1.amazonaws.com/event-platform-prometheus:latest",
+      "image": "prom/prometheus:v2.51.2",
       "essential": true,
       "portMappings": [
         {
