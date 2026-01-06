@@ -1,54 +1,46 @@
 version: 0.2
 
 phases:
-  install:
-    commands:
-      - echo Installing dependencies...
-      - apt-get update -y
-      - apt-get install -y unzip
   pre_build:
     commands:
-      - echo Extracting source code...
-      - unzip -q source-code.zip || true
-      - ls -la
       - echo Logging in to Amazon ECR...
-      - ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-      - REGION=us-east-1
-      - ECR_BASE=${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com
-      - aws ecr get-login-password --region ${REGION} | docker login --username AWS --password-stdin ${ECR_BASE}
-      - echo Logged in to ECR
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+      - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+      - IMAGE_TAG=${COMMIT_HASH:=latest}
+  
   build:
     commands:
       - echo Build started on `date`
-      - ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-      - REGION=us-east-1
-      - ECR_BASE=${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com
+      - echo Building Telemetry API...
+      - docker build -f Dockerfile.producer -t $ECR_REPO_TELEMETRY:latest .
+      - docker tag $ECR_REPO_TELEMETRY:latest $ECR_REPO_TELEMETRY:$IMAGE_TAG
       
-      - echo Building telemetry-api image...
-      - docker build -f Dockerfile.producer -t ${ECR_BASE}/event-platform-telemetry-api:latest .
-      - docker tag ${ECR_BASE}/event-platform-telemetry-api:latest ${ECR_BASE}/event-platform-telemetry-api:build-$(date +%s)
+      - echo Building Processor...
+      - docker build -f Dockerfile.consumer -t $ECR_REPO_PROCESSOR:latest .
+      - docker tag $ECR_REPO_PROCESSOR:latest $ECR_REPO_PROCESSOR:$IMAGE_TAG
       
-      - echo Building processor image...
-      - docker build -f Dockerfile.consumer -t ${ECR_BASE}/event-platform-processor:latest .
-      - docker tag ${ECR_BASE}/event-platform-processor:latest ${ECR_BASE}/event-platform-processor:build-$(date +%s)
-      
-      - echo Building analytics-api image...
-      - docker build -f Dockerfile.graphql -t ${ECR_BASE}/event-platform-analytics-api:latest .
-      - docker tag ${ECR_BASE}/event-platform-analytics-api:latest ${ECR_BASE}/event-platform-analytics-api:build-$(date +%s)
+      - echo Building Analytics API...
+      - docker build -f Dockerfile.graphql -t $ECR_REPO_ANALYTICS:latest .
+      - docker tag $ECR_REPO_ANALYTICS:latest $ECR_REPO_ANALYTICS:$IMAGE_TAG
+  
   post_build:
     commands:
       - echo Build completed on `date`
-      - ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-      - REGION=us-east-1
-      - ECR_BASE=${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com
+      - echo Pushing images to ECR...
+      - docker push $ECR_REPO_TELEMETRY:latest
+      - docker push $ECR_REPO_TELEMETRY:$IMAGE_TAG
+      - docker push $ECR_REPO_PROCESSOR:latest
+      - docker push $ECR_REPO_PROCESSOR:$IMAGE_TAG
+      - docker push $ECR_REPO_ANALYTICS:latest
+      - docker push $ECR_REPO_ANALYTICS:$IMAGE_TAG
       
-      - echo Pushing telemetry-api image...
-      - docker push ${ECR_BASE}/event-platform-telemetry-api:latest
+      - echo Updating ECS services...
+      - aws ecs update-service --cluster event-platform-cluster --service event-platform-telemetry-api --force-new-deployment --region $AWS_DEFAULT_REGION
+      - aws ecs update-service --cluster event-platform-cluster --service event-platform-processor --force-new-deployment --region $AWS_DEFAULT_REGION
+      - aws ecs update-service --cluster event-platform-cluster --service event-platform-analytics-api --force-new-deployment --region $AWS_DEFAULT_REGION
       
-      - echo Pushing processor image...
-      - docker push ${ECR_BASE}/event-platform-processor:latest
-      
-      - echo Pushing analytics-api image...
-      - docker push ${ECR_BASE}/event-platform-analytics-api:latest
-      
-      - echo "All images pushed successfully!"
+      - echo Deployment complete!
+
+cache:
+  paths:
+    - '/root/.cache/pip/**/*'
