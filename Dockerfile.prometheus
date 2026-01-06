@@ -1,7 +1,27 @@
 FROM prom/prometheus:v2.51.2
 
+# Install Python and AWS CLI
+USER root
+RUN apk add --no-cache python3 py3-pip aws-cli
+
 # Copy Prometheus config
 COPY infra/monitoring/prometheus-ecs.yml /etc/prometheus/prometheus.yml
 
-# Start Prometheus
-CMD ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus"]
+# Copy service discovery script
+COPY infra/monitoring/prometheus-sd/update-targets.py /usr/local/bin/update-targets.py
+RUN chmod +x /usr/local/bin/update-targets.py
+
+# Create targets directory
+RUN mkdir -p /etc/prometheus/targets
+
+# Create startup script that runs service discovery in background and starts Prometheus
+RUN echo '#!/bin/sh' > /usr/local/bin/start-prometheus.sh && \
+    echo 'python3 /usr/local/bin/update-targets.py &' >> /usr/local/bin/start-prometheus.sh && \
+    echo 'while true; do sleep 30; python3 /usr/local/bin/update-targets.py; done &' >> /usr/local/bin/start-prometheus.sh && \
+    echo 'exec /bin/prometheus --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus' >> /usr/local/bin/start-prometheus.sh && \
+    chmod +x /usr/local/bin/start-prometheus.sh
+
+USER nobody
+
+# Start Prometheus with service discovery
+CMD ["/usr/local/bin/start-prometheus.sh"]

@@ -9,7 +9,7 @@
   "containerDefinitions": [
     {
       "name": "prometheus",
-      "image": "prom/prometheus:v2.51.2",
+      "image": "410772457866.dkr.ecr.us-east-1.amazonaws.com/event-platform-prometheus:latest",
       "essential": true,
       "portMappings": [
         {
@@ -21,6 +21,14 @@
         {
           "name": "ENVIRONMENT",
           "value": "production"
+        },
+        {
+          "name": "AWS_REGION",
+          "value": "us-east-1"
+        },
+        {
+          "name": "ECS_CLUSTER",
+          "value": "event-platform-cluster"
         }
       ],
       "logConfiguration": {

@@ -5,19 +5,27 @@ global:
 scrape_configs:
   - job_name: "telemetry-api"
     metrics_path: "/metrics"
-    static_configs:
-      - targets: ["10.0.1.250:8000"]
-        labels:
-          service: "telemetry-api"
-          environment: "production"
+    file_sd_configs:
+      - files:
+          - /etc/prometheus/targets/telemetry-api.json
+        refresh_interval: 30s
+    relabel_configs:
+      - target_label: service
+        replacement: telemetry-api
+      - target_label: environment
+        replacement: production
 
   - job_name: "analytics-api"
     metrics_path: "/metrics"
-    static_configs:
-      - targets: ["10.0.2.17:8001"]
-        labels:
-          service: "analytics-api"
-          environment: "production"
+    file_sd_configs:
+      - files:
+          - /etc/prometheus/targets/analytics-api.json
+        refresh_interval: 30s
+    relabel_configs:
+      - target_label: service
+        replacement: analytics-api
+      - target_label: environment
+        replacement: production
 
   - job_name: "processor"
     metrics_path: "/metrics"
