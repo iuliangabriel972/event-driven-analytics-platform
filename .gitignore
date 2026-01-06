@@ -30,3 +30,8 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+
+# Documentation files (keep locally only)
+*.md
+*.txt
+
