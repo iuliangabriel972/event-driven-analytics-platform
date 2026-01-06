@@ -44,7 +44,6 @@ phases:
       - aws ecs update-service --cluster event-platform-cluster --service event-platform-processor --force-new-deployment --region $AWS_DEFAULT_REGION
       - aws ecs update-service --cluster event-platform-cluster --service event-platform-analytics-api --force-new-deployment --region $AWS_DEFAULT_REGION
       - aws ecs update-service --cluster event-platform-cluster --service event-platform-prometheus --force-new-deployment --region $AWS_DEFAULT_REGION
-      - aws ecs update-service --cluster event-platform-cluster --service event-platform-prometheus --force-new-deployment --region $AWS_DEFAULT_REGION
       
       - echo Deployment initiated successfully!
 
