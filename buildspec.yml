@@ -28,6 +28,10 @@ phases:
       - docker build -f Dockerfile.graphql -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/event-platform-analytics-api:latest .
       - docker tag $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/event-platform-analytics-api:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/event-platform-analytics-api:$IMAGE_TAG
       
+      - echo Building Prometheus with service discovery...
+      - docker build -f Dockerfile.prometheus -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/event-platform-prometheus:latest .
+      - docker tag $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/event-platform-prometheus:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/event-platform-prometheus:$IMAGE_TAG
+      
   post_build:
     commands:
       - echo Build completed on `date`
@@ -38,6 +42,8 @@ phases:
       - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/event-platform-processor:$IMAGE_TAG
       - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/event-platform-analytics-api:latest
       - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/event-platform-analytics-api:$IMAGE_TAG
+      - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/event-platform-prometheus:latest
+      - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/event-platform-prometheus:$IMAGE_TAG
       
       - echo Updating ECS services...
       - aws ecs update-service --cluster event-platform-cluster --service event-platform-telemetry-api --force-new-deployment --region $AWS_DEFAULT_REGION
