@@ -23,10 +23,6 @@
           "value": "production"
         }
       ],
-      "command": [
-        "--config.file=/etc/prometheus/prometheus.yml",
-        "--storage.tsdb.path=/prometheus"
-      ],
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
