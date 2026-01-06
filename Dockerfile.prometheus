@@ -1,7 +1,14 @@
 FROM prom/prometheus:v2.51.2
 
-# Copy Prometheus config directly into image
+# Copy Prometheus config
 COPY infra/monitoring/prometheus-ecs.yml /etc/prometheus/prometheus.yml
 
-# Start Prometheus with config
+# Create targets directory
+RUN mkdir -p /etc/prometheus/targets
+
+# Create initial target files with ALB endpoint as fallback
+RUN echo '[{"targets":["event-platform-alb-95530675.us-east-1.elb.amazonaws.com:8000"],"labels":{"service":"telemetry-api"}}]' > /etc/prometheus/targets/telemetry-api.json
+RUN echo '[{"targets":["event-platform-alb-95530675.us-east-1.elb.amazonaws.com:8001"],"labels":{"service":"analytics-api"}}]' > /etc/prometheus/targets/analytics-api.json
+
+# Start Prometheus
 CMD ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus"]
