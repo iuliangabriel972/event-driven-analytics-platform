@@ -5,19 +5,33 @@ global:
 scrape_configs:
   - job_name: "telemetry-api"
     metrics_path: "/metrics"
-    static_configs:
-      - targets: ["event-platform-alb-95530675.us-east-1.elb.amazonaws.com:8000"]
-        labels:
-          service: "telemetry-api"
-          environment: "production"
+    ec2_sd_configs:
+      - port: 8000
+        filters:
+          - name: tag:Service
+            values: ["event-platform-telemetry-api"]
+    relabel_configs:
+      - source_labels: [__meta_ec2_tag_Service]
+        target_label: service
+      - source_labels: [__meta_ec2_instance_id]
+        target_label: instance
+      - target_label: environment
+        replacement: production
 
   - job_name: "analytics-api"
     metrics_path: "/metrics"
-    static_configs:
-      - targets: ["event-platform-alb-95530675.us-east-1.elb.amazonaws.com:8001"]
-        labels:
-          service: "analytics-api"
-          environment: "production"
+    ec2_sd_configs:
+      - port: 8001
+        filters:
+          - name: tag:Service
+            values: ["event-platform-analytics-api"]
+    relabel_configs:
+      - source_labels: [__meta_ec2_tag_Service]
+        target_label: service
+      - source_labels: [__meta_ec2_instance_id]
+        target_label: instance
+      - target_label: environment
+        replacement: production
 
   - job_name: "processor"
     metrics_path: "/metrics"
