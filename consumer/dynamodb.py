@@ -1,15 +1,30 @@
 """DynamoDB writer for storing normalized events."""
 import json
 import os
+import time
 from typing import Optional
 
 import aioboto3
 from botocore.exceptions import ClientError
+from prometheus_client import Counter, Histogram
 
 from consumer.models import EventModel
 from shared.logger import get_logger
 
 logger = get_logger(__name__)
+
+# Prometheus metrics
+dynamodb_operations = Counter(
+    "dynamodb_operations_total",
+    "DynamoDB operations",
+    ["operation", "table", "status"]
+)
+
+dynamodb_latency = Histogram(
+    "dynamodb_operation_seconds",
+    "DynamoDB operation latency",
+    ["operation", "table"]
+)
 
 
 class DynamoDBWriter:
@@ -128,18 +143,23 @@ class DynamoDBWriter:
         Raises:
             ClientError: If DynamoDB operation fails (permissions, network, etc.)
         """
+        start_time = time.time()
         session = await self._get_session()
         async with session.resource("dynamodb") as dynamodb:
             table = await dynamodb.Table(self.table_name)
             
             # Check if event already exists (idempotency)
             try:
+                get_start = time.time()
                 response = await table.get_item(
                     Key={
                         "event_id": str(event.event_id),
                         "timestamp": event.timestamp.isoformat(),
                     }
                 )
+                dynamodb_latency.labels(operation="get_item", table=self.table_name).observe(time.time() - get_start)
+                dynamodb_operations.labels(operation="get_item", table=self.table_name, status="success").inc()
+                
                 if "Item" in response:
                     logger.debug(
                         "event_already_exists",
@@ -148,6 +168,7 @@ class DynamoDBWriter:
                     )
                     return False
             except ClientError as e:
+                dynamodb_operations.labels(operation="get_item", table=self.table_name, status="error").inc()
                 # If get_item fails due to permissions or network issues, re-raise
                 # to prevent breaking idempotency guarantee
                 error_code = e.response.get("Error", {}).get("Code", "")
@@ -174,15 +195,25 @@ class DynamoDBWriter:
                 item = event.to_dynamodb_item()
                 # Safety check: ensure no floats remain (DynamoDB doesn't support float type)
                 item = self._ensure_no_floats(item)
+                
+                put_start = time.time()
                 await table.put_item(Item=item)
+                put_duration = time.time() - put_start
+                total_duration = time.time() - start_time
+                
+                dynamodb_latency.labels(operation="put_item", table=self.table_name).observe(put_duration)
+                dynamodb_operations.labels(operation="put_item", table=self.table_name, status="success").inc()
+                
                 logger.info(
                     "event_written_to_dynamodb",
                     event_id=str(event.event_id),
                     event_type=event.event_type,
+                    duration_ms=round(total_duration * 1000, 2),
                     table_name=self.table_name,
                 )
                 return True
             except ClientError as e:
+                dynamodb_operations.labels(operation="put_item", table=self.table_name, status="error").inc()
                 error_msg = str(e)
                 logger.error(
                     "dynamodb_write_failed",

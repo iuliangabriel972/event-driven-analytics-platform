@@ -1,16 +1,31 @@
 """S3 writer for storing raw event JSON."""
 import json
 import os
+import time
 from datetime import datetime
 from typing import Optional
 
 import aioboto3
 from botocore.exceptions import ClientError
+from prometheus_client import Counter, Histogram
 
 from consumer.models import EventModel
 from shared.logger import get_logger
 
 logger = get_logger(__name__)
+
+# Prometheus metrics
+s3_uploads = Counter(
+    "s3_uploads_total",
+    "S3 upload operations",
+    ["bucket", "status"]
+)
+
+s3_upload_duration = Histogram(
+    "s3_upload_seconds",
+    "S3 upload latency",
+    ["bucket"]
+)
 
 
 class S3Writer:
@@ -102,6 +117,7 @@ class S3Writer:
         Returns:
             True if successful, False otherwise
         """
+        start_time = time.time()
         session = await self._get_session()
         async with session.client("s3") as s3:
             try:
@@ -116,14 +132,22 @@ class S3Writer:
                     ContentType="application/json",
                 )
                 
+                duration = time.time() - start_time
+                s3_upload_duration.labels(bucket=self.bucket_name).observe(duration)
+                s3_uploads.labels(bucket=self.bucket_name, status="success").inc()
+                
                 logger.info(
                     "event_written_to_s3",
                     event_id=str(event.event_id),
                     bucket_name=self.bucket_name,
                     key=key,
+                    duration_ms=round(duration * 1000, 2),
                 )
                 return True
             except ClientError as e:
+                duration = time.time() - start_time
+                s3_upload_duration.labels(bucket=self.bucket_name).observe(duration)
+                s3_uploads.labels(bucket=self.bucket_name, status="error").inc()
                 logger.error(
                     "s3_write_failed",
                     event_id=str(event.event_id),

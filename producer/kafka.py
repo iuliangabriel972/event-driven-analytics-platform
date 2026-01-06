@@ -1,13 +1,28 @@
 """Kafka producer client for publishing events."""
 import json
+import time
 from typing import Optional
 
 from aiokafka import AIOKafkaProducer
 from aiokafka.errors import KafkaError
+from prometheus_client import Counter, Histogram
 
 from shared.logger import get_logger
 
 logger = get_logger(__name__)
+
+# Prometheus metrics
+kafka_messages_sent = Counter(
+    "kafka_messages_sent_total",
+    "Total Kafka messages sent",
+    ["topic", "status"]
+)
+
+kafka_send_duration = Histogram(
+    "kafka_send_duration_seconds",
+    "Time to send Kafka message",
+    ["topic"]
+)
 
 
 class KafkaProducer:
@@ -68,15 +83,23 @@ class KafkaProducer:
                 logger.error("kafka_auto_connect_failed", error=str(e))
                 raise RuntimeError(f"Producer not connected and auto-connect failed: {str(e)}")
         
+        start_time = time.time()
         try:
             await self.producer.send_and_wait(self.topic, event)
+            duration = time.time() - start_time
+            kafka_send_duration.labels(topic=self.topic).observe(duration)
+            kafka_messages_sent.labels(topic=self.topic, status="success").inc()
             logger.info(
                 "event_published",
                 event_id=str(event.get("event_id")),
                 event_type=event.get("event_type"),
                 topic=self.topic,
+                duration_ms=round(duration * 1000, 2),
             )
         except KafkaError as e:
+            duration = time.time() - start_time
+            kafka_send_duration.labels(topic=self.topic).observe(duration)
+            kafka_messages_sent.labels(topic=self.topic, status="error").inc()
             logger.error(
                 "event_publish_failed",
                 event_id=str(event.get("event_id")),
