@@ -1,9 +1,18 @@
+# Multi-stage build: Install AWS CLI
+FROM amazon/aws-cli:latest AS aws-cli
+
 # Use official Prometheus image  
 FROM prom/prometheus:v2.51.2
 
-# Copy simple static config (will be updated manually via ALB DNS)
-COPY infra/monitoring/prometheus-simple.yml /etc/prometheus/prometheus.yml
-
 USER root
 
-# Use default Prometheus entrypoint, it will use our config
+# Copy AWS CLI from first stage
+COPY --from=aws-cli /usr/local/aws-cli /usr/local/aws-cli
+COPY --from=aws-cli /usr/local/bin/aws /usr/local/bin/aws
+
+# Copy the dynamic update script
+COPY infra/monitoring/update-prometheus-targets.sh /usr/local/bin/update-prometheus-targets.sh
+RUN chmod +x /usr/local/bin/update-prometheus-targets.sh
+
+# Start with the update script (it will start Prometheus)
+CMD ["/usr/local/bin/update-prometheus-targets.sh"]
