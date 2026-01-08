@@ -31,8 +31,15 @@ venv/
 .DS_Store
 Thumbs.db
 
-# Documentation files (keep locally only)
-*.md
+# Documentation files
 *.txt
 !requirements.txt
+
+# Exclude local/temporary markdown files
+*.local.md
+*-notes.md
+
+# Include critical documentation
+!MONITORING_SETUP.md
+!README.md
 
