@@ -1,0 +1,30 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "telemetry-api"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets: ["TELEMETRY_API_IP:8000"]
+        labels:
+          service: telemetry-api
+          environment: production
+
+  - job_name: "analytics-api"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets: ["ANALYTICS_API_IP:8001"]
+        labels:
+          service: analytics-api
+          environment: production
+
+  - job_name: "processor"
+    metrics_path: "/metrics"
+    ec2_sd_configs:
+      - region: us-east-1
+        port: 8002
+        filters:
+          - name: tag:Service
+            values: ["event-platform-processor"]
+

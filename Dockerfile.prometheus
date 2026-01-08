@@ -1,33 +1,9 @@
+# Use official Prometheus image  
 FROM prom/prometheus:v2.51.2
 
-# Install Python and AWS CLI for service discovery
-USER root
-RUN apk add --no-cache python3 py3-pip aws-cli
+# Copy simple static config (will be updated manually via ALB DNS)
+COPY infra/monitoring/prometheus-simple.yml /etc/prometheus/prometheus.yml
 
-# Copy Prometheus config (uses file-based service discovery)
-COPY infra/monitoring/prometheus-ecs.yml /etc/prometheus/prometheus.yml
-
-# Copy service discovery script
-COPY infra/monitoring/prometheus-sd/update-targets.py /usr/local/bin/update-targets.py
-RUN chmod +x /usr/local/bin/update-targets.py
-
-# Create targets directory with write permissions
-RUN mkdir -p /etc/prometheus/targets && \
-    chmod 777 /etc/prometheus/targets
-
-# Create startup script that runs service discovery in background loop
-RUN echo '#!/bin/sh' > /start.sh && \
-    echo 'set -e' >> /start.sh && \
-    echo 'echo "[$(date)] Initializing Prometheus service discovery..."' >> /start.sh && \
-    echo 'python3 /usr/local/bin/update-targets.py || echo "Initial discovery failed, will retry..."' >> /start.sh && \
-    echo 'echo "[$(date)] Starting service discovery loop in background..."' >> /start.sh && \
-    echo '(while true; do sleep 30; python3 /usr/local/bin/update-targets.py || true; done) &' >> /start.sh && \
-    echo 'echo "[$(date)] Starting Prometheus server..."' >> /start.sh && \
-    echo 'exec /bin/prometheus --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus --web.listen-address=0.0.0.0:9090 --web.enable-lifecycle' >> /start.sh && \
-    chmod +x /start.sh
-
-# Keep as root to ensure AWS CLI and file writes work
 USER root
 
-# Start with service discovery
-CMD ["/start.sh"]
+# Use default Prometheus entrypoint, it will use our config

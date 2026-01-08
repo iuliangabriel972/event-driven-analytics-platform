@@ -89,33 +89,33 @@ def update_targets():
     
     # Telemetry API
     telemetry_ip = get_task_ip("event-platform-telemetry-api")
+    target_file = f"{TARGETS_DIR}/telemetry-api.json"
     if telemetry_ip:
         targets = [{"targets": [f"{telemetry_ip}:8000"], "labels": {"service": "telemetry-api", "environment": "production"}}]
-        target_file = f"{TARGETS_DIR}/telemetry-api.json"
         with open(target_file, "w") as f:
             json.dump(targets, f, indent=2)
         log(f"✅ Updated telemetry-api: {telemetry_ip}:8000")
         updated = True
     else:
         log(f"⚠️  Could not update telemetry-api - service not found or not running")
-        # Write empty targets to avoid stale data
-        with open(f"{TARGETS_DIR}/telemetry-api.json", "w") as f:
-            json.dump([], f)
+        # Write empty array (valid JSON) to avoid stale data
+        with open(target_file, "w") as f:
+            json.dump([], f, indent=2)
     
     # Analytics API
     analytics_ip = get_task_ip("event-platform-analytics-api")
+    target_file = f"{TARGETS_DIR}/analytics-api.json"
     if analytics_ip:
         targets = [{"targets": [f"{analytics_ip}:8001"], "labels": {"service": "analytics-api", "environment": "production"}}]
-        target_file = f"{TARGETS_DIR}/analytics-api.json"
         with open(target_file, "w") as f:
             json.dump(targets, f, indent=2)
         log(f"✅ Updated analytics-api: {analytics_ip}:8001")
         updated = True
     else:
         log(f"⚠️  Could not update analytics-api - service not found or not running")
-        # Write empty targets to avoid stale data
-        with open(f"{TARGETS_DIR}/analytics-api.json", "w") as f:
-            json.dump([], f)
+        # Write empty array (valid JSON) to avoid stale data
+        with open(target_file, "w") as f:
+            json.dump([], f, indent=2)
     
     if updated:
         log("✅ Service discovery update complete")

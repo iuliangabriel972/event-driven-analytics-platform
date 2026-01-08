@@ -5,25 +5,31 @@ global:
 scrape_configs:
   - job_name: "telemetry-api"
     metrics_path: "/metrics"
-    file_sd_configs:
-      - files:
-          - /etc/prometheus/targets/telemetry-api.json
-        refresh_interval: 30s
+    ecs_sd_configs:
+      - region: us-east-1
+        cluster: event-platform-cluster
+        port: 8000
+        filters:
+          - name: service-name
+            values: ["event-platform-telemetry-api"]
     relabel_configs:
-      - target_label: service
-        replacement: telemetry-api
+      - source_labels: [__meta_ecs_service_name]
+        target_label: service
       - target_label: environment
         replacement: production
 
   - job_name: "analytics-api"
     metrics_path: "/metrics"
-    file_sd_configs:
-      - files:
-          - /etc/prometheus/targets/analytics-api.json
-        refresh_interval: 30s
+    ecs_sd_configs:
+      - region: us-east-1
+        cluster: event-platform-cluster
+        port: 8001
+        filters:
+          - name: service-name
+            values: ["event-platform-analytics-api"]
     relabel_configs:
-      - target_label: service
-        replacement: analytics-api
+      - source_labels: [__meta_ecs_service_name]
+        target_label: service
       - target_label: environment
         replacement: production
 
@@ -35,3 +41,4 @@ scrape_configs:
         filters:
           - name: tag:Service
             values: ["event-platform-processor"]
+
